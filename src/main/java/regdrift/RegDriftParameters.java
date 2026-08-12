@@ -45,6 +45,7 @@ public final class RegDriftParameters {
     private final String saveRoot;
     private final boolean hideDisplay;
     private final boolean serial;
+    private final Cancellation cancellation;
 
     private RegDriftParameters(Builder builder) {
         this.image = builder.image;
@@ -63,6 +64,7 @@ public final class RegDriftParameters {
         this.saveRoot = builder.saveRoot;
         this.hideDisplay = builder.hideDisplay;
         this.serial = builder.serial;
+        this.cancellation = builder.cancellation;
     }
 
     /**
@@ -164,6 +166,22 @@ public final class RegDriftParameters {
         return serial;
     }
 
+    /**
+     * The switch that says whether this run has been asked to stop.
+     *
+     * <p>Never null. A run built without one carries {@link Cancellation#never()},
+     * which is what a headless caller and a batch loop want: nothing to pull, so
+     * nothing to check for.
+     *
+     * <p>Not a macro option, and deliberately so. Stopping is something a person
+     * does while a run is in flight, not a setting a script writes down before
+     * it starts, so it travels in the settings bundle without appearing in the
+     * fifteen published option names.
+     */
+    public Cancellation cancellation() {
+        return cancellation;
+    }
+
     /** True when a save root was given. */
     public boolean hasSaveRoot() {
         return !saveRoot.isEmpty();
@@ -198,6 +216,7 @@ public final class RegDriftParameters {
         private String saveRoot = "";
         private boolean hideDisplay = false;
         private boolean serial = false;
+        private Cancellation cancellation = Cancellation.never();
 
         private Builder(ImagePlus image) {
             if (image == null) {
@@ -294,6 +313,17 @@ public final class RegDriftParameters {
         /** Whether to use one worker everywhere. */
         public Builder serial(boolean serial) {
             this.serial = serial;
+            return this;
+        }
+
+        /**
+         * The switch a person can pull to stop this run.
+         *
+         * <p>Left alone, the run carries {@link Cancellation#never()} and can be
+         * stopped by nobody, which is the right answer for a headless call.
+         */
+        public Builder cancellation(Cancellation cancellation) {
+            this.cancellation = cancellation == null ? Cancellation.never() : cancellation;
             return this;
         }
 

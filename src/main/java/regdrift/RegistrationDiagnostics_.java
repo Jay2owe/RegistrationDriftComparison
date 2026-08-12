@@ -8,22 +8,58 @@
  */
 package regdrift;
 
-import ij.IJ;
-import ij.plugin.PlugIn;
+import regdrift.ui.DiagnosticsDialog;
+import regdrift.ui.ImageChoices;
+import regdrift.ui.RegDriftDialog;
+
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 
 /**
- * Placeholder entry for {@code Plugins > Registration > Registration
- * Diagnostics...}.
+ * {@code Plugins > Registration > Registration Diagnostics...}
  *
- * <p>It exists so that the menu wiring, the packaging and the install path can
- * be proved before there is anything to run. Stage 04 replaces it with the
- * real dialog and the macro-versus-interactive routing.
+ * <p>The entry that measures and stops: what kind of movement the recording
+ * holds, whether it can be registered at all, and which engines the measurement
+ * supports. Everything it does works on a Fiji with no registration engine
+ * installed, which is why it is its own menu item - somebody whose recording may
+ * not be registrable should be able to find that out without first being shown a
+ * list of software.
+ *
+ * <p>It therefore offers the two measuring modes and turns the other three away
+ * with a sentence naming the menu item that runs them. It does not quietly run
+ * something else instead: a line that asked to apply an engine and got a
+ * diagnosis would look like it worked.
  */
-public class RegistrationDiagnostics_ implements PlugIn {
+public class RegistrationDiagnostics_ extends RegDriftEntry {
+
+    /** The menu wording, spelled as {@code plugins.config} spells it. */
+    public static final String COMMAND = "Registration Diagnostics...";
+
+    /** The sibling menu item, which runs the three modes this entry turns away. */
+    public static final String SIBLING_COMMAND = "Compare Registration Methods...";
+
+    private static final List<Mode> MODES = Collections.unmodifiableList(Arrays.asList(
+            Mode.DIAGNOSE, Mode.DIAGNOSE_AND_RECOMMEND));
 
     @Override
-    public void run(String arg) {
-        IJ.showMessage("Registration Diagnostics",
-                "Under construction. See docs/regdrift-build/.");
+    public String command() {
+        return COMMAND;
+    }
+
+    @Override
+    public String otherCommand() {
+        return SIBLING_COMMAND;
+    }
+
+    /** The two modes that measure. */
+    @Override
+    public List<Mode> modesRunHere() {
+        return MODES;
+    }
+
+    @Override
+    protected RegDriftDialog newDialog(ImageChoices choices) {
+        return new DiagnosticsDialog(choices);
     }
 }

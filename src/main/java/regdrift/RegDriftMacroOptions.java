@@ -314,8 +314,29 @@ public final class RegDriftMacroOptions {
      *                        {@link #getCompareWith()} by the caller, or null
      */
     public RegDriftParameters toParameters(ImagePlus image, ImagePlus compareWithImage) {
+        return toParameters(image, compareWithImage, Cancellation.never());
+    }
+
+    /**
+     * Turns these settings into a run that somebody can stop.
+     *
+     * <p>The switch is not one of the fifteen option names and never will be:
+     * stopping is something a person does while a run is in flight, not a value
+     * a script writes down beforehand. It is threaded through here so that the
+     * mapping from settings to a run stays in one method rather than being
+     * copied by every caller that has a Cancel button.
+     *
+     * @param image            the recording to measure
+     * @param compareWithImage the second stack, resolved from
+     *                         {@link #getCompareWith()} by the caller, or null
+     * @param cancellation     the switch that stops the run, or null for one
+     *                         nobody can pull
+     */
+    public RegDriftParameters toParameters(ImagePlus image, ImagePlus compareWithImage,
+                                           Cancellation cancellation) {
         validate();
         return RegDriftParameters.builder(image)
+                .cancellation(cancellation)
                 .mode(mode)
                 .channel(channel)
                 .slice(slice)

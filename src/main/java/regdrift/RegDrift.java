@@ -80,6 +80,9 @@ public final class RegDrift {
             throw new IllegalArgumentException("RegDrift.run needs a settings bundle. Build one"
                     + " with RegDriftParameters.builder(image).build().");
         }
+        if (parameters.cancellation().canceled()) {
+            return RegDriftResult.failed(parameters, stopped());
+        }
         Failure unusable = checkRunnable(parameters);
         if (unusable != null) {
             return RegDriftResult.failed(parameters, unusable);
@@ -100,6 +103,19 @@ public final class RegDrift {
         }
         throw new IllegalStateException("Mode " + parameters.mode() + " has no branch in"
                 + " RegDrift.run. A mode was added to the enum without one.");
+    }
+
+    /**
+     * The reason a run hands back when the person who started it asked it to
+     * stop.
+     *
+     * <p>A sentence rather than a thrown exception, so a batch loop can tell
+     * "the user stopped this one" apart from "this one broke", and so nothing
+     * half-finished is shown as though it were a measurement.
+     */
+    public static Failure stopped() {
+        return Failure.of(Failure.Kind.CANCELED, "This run was stopped before it finished, so"
+                + " there is nothing to report. Nothing was changed and nothing was saved.");
     }
 
     /**

@@ -102,16 +102,21 @@ public class ApiIsolationTest {
      * The scan has to be able to see a reference that is really there, or every
      * assertion below is decoration.
      *
-     * <p>{@code CompareRegistration_} calls {@code IJ.showMessage}, which is the
-     * same shape of call as the {@code IJ.error} this test exists to catch, on a
-     * class this repository really ships. If the pool reader can find that, it
-     * can find the other.
+     * <p>{@code RegDriftEntry} calls {@code IJ.error}, which is exactly the call
+     * this test exists to catch, on a class this repository really ships. If the
+     * pool reader can find that one, it can find one that should not be there.
+     *
+     * <p>The canary moved here when stage 04 replaced the placeholder entry
+     * classes. It used to be {@code CompareRegistration_.IJ.showMessage}, which
+     * was the placeholder's "under construction" box; the routing those entries
+     * now share is where the plugin reports a failure to somebody, so that is
+     * where the call to watch for lives.
      */
     @Test
     public void theScanSeesAReferenceThatIsReallyThere() throws IOException {
-        Pool entry = poolOf("regdrift.CompareRegistration_");
-        assertTrue("the scan must see ij.IJ.showMessage in a class that really calls it",
-                entry.members.contains("ij/IJ#showMessage"));
+        Pool entry = poolOf("regdrift.RegDriftEntry");
+        assertTrue("the scan must see ij.IJ.error in a class that really calls it",
+                entry.members.contains("ij/IJ#error"));
         assertTrue("the scan must see the ij.IJ class reference too",
                 entry.mentions("ij/IJ"));
 
