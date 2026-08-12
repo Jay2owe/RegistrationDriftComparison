@@ -270,6 +270,43 @@ public final class RegDriftMacroOptions {
     }
 
     /**
+     * Reads the settings back out of a finished request.
+     *
+     * <p>The reverse of {@link #toParameters}, and the one place that mapping is
+     * written down. Two callers need it: the record of what a run was given,
+     * which is written beside the results, and the macro line a dialog offers
+     * for copying. Neither should carry its own copy of which field is spelled
+     * which way.
+     *
+     * <p>{@code compare_with} becomes the second stack's window title, which is
+     * how a macro names an open image.
+     */
+    public static RegDriftMacroOptions from(RegDriftParameters parameters) {
+        if (parameters == null) {
+            throw new IllegalArgumentException("Settings can be read back from a request, and none"
+                    + " was given.");
+        }
+        RegDriftMacroOptions options = new RegDriftMacroOptions();
+        options.setMode(parameters.mode());
+        options.setChannel(parameters.channel());
+        options.setSlice(parameters.slice());
+        options.setUseRoi(parameters.useRoi());
+        options.setEngines(parameters.engines());
+        options.setApplyEngine(parameters.applyEngine());
+        options.setWindows(parameters.windows());
+        options.setWindowFrames(parameters.windowFrames());
+        options.setArbiter(parameters.arbiter());
+        options.setFlagMotionLoss(parameters.flagMotionLoss());
+        options.setAdviseCeiling(parameters.adviseCeiling());
+        options.setCompareWith(parameters.compareWith() == null
+                ? "" : parameters.compareWith().getTitle());
+        options.setSaveRoot(parameters.saveRoot());
+        options.setHideDisplay(parameters.hideDisplay());
+        options.setSerial(parameters.serial());
+        return options;
+    }
+
+    /**
      * Turns these settings into a run over one recording.
      *
      * @param image           the recording to measure

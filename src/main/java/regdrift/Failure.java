@@ -28,6 +28,16 @@ public final class Failure {
         /** The settings could not be used as given. */
         INVALID_PARAMETERS,
 
+        /**
+         * The request is understood and this build does not carry it out yet.
+         *
+         * <p>A branch that has not been written returns this rather than an
+         * empty bundle or a thrown exception, so a dialog can be opened and
+         * clicked, and a macro can be replayed, before the engine underneath it
+         * exists. The message names the build stage the branch arrives in.
+         */
+        NOT_IMPLEMENTED,
+
         /** The image holds a single frame, so there is no movement to measure. */
         NO_TIME_AXIS,
 
@@ -51,6 +61,20 @@ public final class Failure {
 
         /** The user stopped the run. */
         CANCELED,
+
+        /** The results could not be written to the folder they were asked for. */
+        SAVE_FAILED,
+
+        /**
+         * A file in the auto-save tree would sit at a path this system refuses.
+         *
+         * <p>Separate from {@link #SAVE_FAILED} because the repair is different
+         * and the user can carry it out: shorten the save root, or shorten the
+         * image title. Windows refuses a path of 260 characters or more, and a
+         * microscope-generated title inside a synchronized folder reaches that
+         * without anybody noticing.
+         */
+        PATH_TOO_LONG,
 
         /** A defect in this plugin. Reported as such rather than as user error. */
         INTERNAL_ERROR
