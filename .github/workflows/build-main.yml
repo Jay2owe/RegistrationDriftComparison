@@ -1,0 +1,68 @@
+name: build-main
+
+on:
+  push:
+    branches: [main]
+
+# This plugin compiles two chassis modules in rather than requiring them as
+# installs, so the build needs them present before it starts. They are
+# published to no Maven repository on purpose: a core that a user could
+# download separately is a core two plugins can disagree about the version of.
+# They are built here from their own tagged sources instead.
+#
+# The tags are pinned, not floating. A moving ref would mean this workflow
+# could start producing a different jar from the same commit, which is exactly
+# the provenance claim a released, DOI-archived plugin is making.
+#
+# Neither core repository is reachable from CI until it is pushed to GitHub —
+# stage 16 owns that, along with this repository's own remote. Until then this
+# workflow is the shape, not a passing check.
+env:
+  OC3D_CORE_TAG: v0.2.0
+  AUTOFIX_CORE_TAG: v0.1.0
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '8'
+          distribution: 'zulu'
+      - name: Cache Maven repo
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-m2-
+
+      - name: Check out oc3d-core
+        uses: actions/checkout@v4
+        with:
+          repository: Jay2owe/oc3d-core
+          ref: ${{ env.OC3D_CORE_TAG }}
+          path: .cores/oc3d-core
+      - name: Check out autofix-core
+        uses: actions/checkout@v4
+        with:
+          repository: Jay2owe/autofix-core
+          ref: ${{ env.AUTOFIX_CORE_TAG }}
+          path: .cores/autofix-core
+
+      # Order does not matter: autofix-core depends on net.imagej:ij and
+      # nothing else, not even oc3d-core.
+      - name: Install oc3d-core
+        run: mvn -B -DskipTests install
+        working-directory: .cores/oc3d-core
+      - name: Install autofix-core
+        run: mvn -B -DskipTests install
+        working-directory: .cores/autofix-core
+
+      - name: Build
+        run: bash mvnw clean package
+      - name: Upload jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: RegistrationDriftComparison-jar
+          path: target/RegistrationDriftComparison-*.jar

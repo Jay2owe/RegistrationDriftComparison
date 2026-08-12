@@ -1,0 +1,33 @@
+# Build output
+target/
+tools-build/
+.mvn/wrapper/maven-dist/
+
+# IDE
+.idea/
+*.iml
+.project
+.classpath
+.settings/
+
+# Temp files
+*.tmp.*
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local audit and non-public development material
+tools/
+
+# This repository lives inside a synchronized folder. A sync artefact that gets
+# committed looks like source and diverges silently.
+*conflicted copy*
+.conflicted-copies-*/
+
+# Diverges from CPC's .gitignore on purpose: CPC also ignores `docs/` and
+# `src/test/` because it is a public repository with local-only material. Here
+# `docs/regdrift-build/` is the build plan every later stage reads, and
+# `src/test/` holds the test suite, so both are tracked. Stage 16 decides what
+# is stripped for publication.
