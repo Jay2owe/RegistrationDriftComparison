@@ -26,14 +26,21 @@ import static org.junit.Assert.fail;
  * {@link RegDrift#run} as it stands: every mode answers, none of them throws,
  * and none of them needs an ImageJ window to be open.
  *
- * <p><b>Diagnose measures; the other four do not yet.</b> Each of those returns a
- * real result carrying a typed {@code not_implemented} reason that names the
- * build stage the branch arrives in, which is what let stage 04 build the dialog
- * and click through it before an estimator existed. As each stage lands, the
- * assertion for its mode changes from "says which stage" to "measured
- * something", one mode at a time; stage 09 moved {@link Mode#DIAGNOSE} across.
- * What diagnose measures is {@code DiagnoseModeTest}'s business, not this
- * file's - here it only has to answer.
+ * <p><b>The two measuring modes measure; the other three do not yet.</b> Each of
+ * those returns a real result carrying a typed {@code not_implemented} reason
+ * that names the build stage the branch arrives in, which is what let stage 04
+ * build the dialog and click through it before an estimator existed. As each
+ * stage lands, the assertion for its mode changes from "says which stage" to
+ * "measured something", one mode at a time; stage 09 moved {@link Mode#DIAGNOSE}
+ * across and stage 10 moved {@link Mode#DIAGNOSE_AND_RECOMMEND}. What those two
+ * measure is {@code DiagnoseModeTest}'s and {@code RecommenderTest}'s business,
+ * not this file's - here they only have to answer.
+ *
+ * <p>{@link Mode#DIAGNOSE_AND_RECOMMEND} is the default mode, so the four tests
+ * below that call {@link RegDrift#run} with nothing but a recording used to be
+ * the not-implemented tests as well. They are not any more: a default request
+ * now comes back with a ranking, and the tests that need a mode with a reason to
+ * give name one.
  *
  * <p>Nothing here opens a window, and nothing here is running inside a Fiji. The
  * whole test class is the demonstration for that half of the promise; the other
@@ -44,7 +51,6 @@ public class FacadeTest {
 
     @Test
     public void everyModeAnswersWithTheStageItArrivesIn() {
-        assertNotImplemented(Mode.DIAGNOSE_AND_RECOMMEND, "10");
         assertNotImplemented(Mode.APPLY, "13");
         assertNotImplemented(Mode.COMPARE, "13");
         assertNotImplemented(Mode.SCORE, "12");
@@ -64,6 +70,34 @@ public class FacadeTest {
     }
 
     /**
+     * The mode that ranks, answering with a ranking rather than a reason.
+     *
+     * <p>Stage 10 filled this branch in, so the assertion that used to read
+     * "names build stage 10" reads "produced a ranking" instead. What is in the
+     * ranking is {@code RecommenderTest}'s business; here it has to exist, be
+     * numbered from rank 1, carry the recording's own table, and say which
+     * recordings the figures in it were measured on - defect D10.
+     */
+    @Test
+    public void diagnoseAndRecommendRanksRatherThanNamingAStage() {
+        RegDriftResult result = RegDrift.run(requestFor(Mode.DIAGNOSE_AND_RECOMMEND));
+
+        assertNull(result.failure() == null ? "" : result.failure().message(), result.failure());
+        assertNotNull("it measures first, so it answers with a verdict too", result.verdict());
+        assertNotNull(result.diagnosis());
+        assertFalse("and with a ranking, which is what this mode adds",
+                result.ranked().isEmpty());
+        assertNotNull("carried as a table as well as as objects", result.recommendation());
+        assertEquals("the ranking starts at rank 1, never at rank 0",
+                1, result.ranked().get(0).rank());
+        assertNotNull(result.provenance());
+        assertTrue("which states the recordings the table was measured on - defect D10",
+                result.provenance().calibrationSet().contains("three IncuCyte phase-contrast"));
+        assertTrue("and nothing was installed to produce it - house rule 9",
+                result.ranked().get(0).presence() != null);
+    }
+
+    /**
      * Five modes, five branches. A mode with no branch must not slip through -
      * whether it answers with a measurement or with the stage it arrives in.
      */
@@ -79,13 +113,19 @@ public class FacadeTest {
         assertEquals("five modes are wired here and in the dialog", 5, Mode.values().length);
     }
 
-    /** The default request needs nothing but a recording. */
+    /**
+     * The default request needs nothing but a recording, and now answers with a
+     * ranking rather than with the stage it was waiting for.
+     */
     @Test
     public void aRecordingOnItsOwnIsEnoughToCallThis() {
         RegDriftResult result = RegDrift.run(stack(1, 1, 6, "movie.tif"));
         assertNotNull(result);
         assertEquals(Mode.DIAGNOSE_AND_RECOMMEND, result.parameters().mode());
-        assertEquals(Failure.Kind.NOT_IMPLEMENTED, result.failure().kind());
+        assertNull(result.failure() == null ? "" : result.failure().message(), result.failure());
+        assertTrue("the default request measures and then ranks", result.isSuccess());
+        assertFalse("so a recording on its own is enough to get a ranking",
+                result.ranked().isEmpty());
     }
 
     /**
@@ -110,10 +150,17 @@ public class FacadeTest {
         assertNull("nor may it start ImageJ itself", IJ.getInstance());
     }
 
-    /** A run that produced nothing says why, and says it in a readable sentence. */
+    /**
+     * A run that produced nothing says why, and says it in a readable sentence.
+     *
+     * <p>Asked of {@link Mode#APPLY} rather than of the default mode, because the
+     * default mode produces something now. The rule this checks is about the
+     * shape of a run that could not finish, not about which mode is unbuilt this
+     * week, so it moves to whichever mode still has a reason to give.
+     */
     @Test
     public void aRunThatCannotFinishGivesATypedReasonRatherThanNull() {
-        RegDriftResult result = RegDrift.run(stack(1, 1, 6, "movie.tif"));
+        RegDriftResult result = RegDrift.run(requestFor(Mode.APPLY));
 
         assertFalse(result.isSuccess());
         assertNotNull(result.failure());
@@ -139,12 +186,23 @@ public class FacadeTest {
                 result.failure().message().contains("still.tif"));
     }
 
-    /** A plain stack is read as a time series, which is what the contract says. */
+    /**
+     * A plain stack is read as a time series, which is what the contract says.
+     *
+     * <p>Nine slices, one declared frame, no channels: an unlabelled TIFF from a
+     * microscope. It is counted as nine time points and it runs, rather than
+     * being refused as a single frame with no movement in it.
+     */
     @Test
     public void aPlainStackIsReadAsATimeSeries() {
         ImagePlus plain = stack(1, 9, 1, "plain.tif");
         assertEquals(9, RegDrift.frameCount(plain));
-        assertEquals(Failure.Kind.NOT_IMPLEMENTED, RegDrift.run(plain).failure().kind());
+
+        RegDriftResult result = RegDrift.run(plain);
+
+        assertNull("nine slices are nine time points, not a still frame",
+                result.failure() == null ? null : result.failure().kind());
+        assertTrue(result.isSuccess());
         assertEquals(0, RegDrift.frameCount(null));
     }
 
@@ -183,13 +241,22 @@ public class FacadeTest {
         }
     }
 
-    /** The version travels with the result rather than being spelled twice. */
+    /**
+     * The version travels with the result rather than being spelled twice.
+     *
+     * <p>Two carriers, because the default mode measures now: an unbuilt mode
+     * puts the version in the reason it gives, and a mode that finishes puts it
+     * in the record of what it did.
+     */
     @Test
     public void theVersionIsSpelledInOnePlace() {
         assertFalse(RegDrift.VERSION.trim().isEmpty());
         assertTrue("the not-implemented reason carries the build it came from",
-                RegDrift.run(stack(1, 1, 6, "movie.tif")).failure().message()
+                RegDrift.run(requestFor(Mode.APPLY)).failure().message()
                         .contains(RegDrift.VERSION));
+        assertEquals("and a run that finished records it rather than spelling it again",
+                RegDrift.VERSION,
+                RegDrift.run(stack(1, 1, 6, "movie.tif")).provenance().pluginVersion());
     }
 
     // -------------------------------------------------------------- fixtures

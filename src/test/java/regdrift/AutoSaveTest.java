@@ -16,6 +16,7 @@ import org.junit.Assume;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+import regdrift.advise.CeilingAdvice;
 
 import java.io.File;
 import java.io.IOException;
@@ -152,6 +153,38 @@ public class AutoSaveTest {
         }
     }
 
+    /**
+     * The saved notes describe an intensity ceiling and warn about it in the same
+     * breath - defect D4.
+     *
+     * <p>The sentence and its warning are one string, so a reader who finds the
+     * first cannot miss the second, and the number it quotes is read back out of
+     * the {@code bright_fraction} cell of the diagnosis file sitting beside it.
+     * Nothing here is a setting: no macro option turns a ceiling on, and the
+     * notes say so rather than leaving the reader to assume it.
+     */
+    @Test
+    public void theReadmeDescribesAnIntensityCeilingAndWarnsAboutItTogether() throws IOException {
+        File root = folder.newFolder("results");
+        RegDriftAutoSave.save(root, measuredRun("movie.tif"));
+
+        String readme = text(new File(root,
+                RegDriftAutoSave.TREE_FOLDER + "/" + RegDriftAutoSave.README_FILE));
+
+        assertTrue("the notes must describe what a ceiling would exclude",
+                readme.contains("would exclude it"));
+        assertTrue("quoting the share the diagnosis file beside it measured",
+                readme.contains("10% of each frame"));
+        assertTrue("and the warning must travel in the same passage, always",
+                readme.contains(CeilingAdvice.CONTRAINDICATION));
+        for (String option : RegDriftMacroOptions.allOptionNames()) {
+            if (!option.toLowerCase(java.util.Locale.ROOT).contains("ceiling")) continue;
+            assertEquals("a macro option naming a ceiling may ask for the sentence and nothing"
+                            + " else - there is no option that switches one on",
+                    RegDriftMacroOptions.ADVISE_CEILING, option);
+        }
+    }
+
     // ---------------------------------------------------------- summary.csv
 
     @Test
@@ -237,11 +270,20 @@ public class AutoSaveTest {
                 RegDriftAutoSave.parseCsvLine(written.get(0)));
     }
 
-    /** A run that measured nothing still says so, in its own line. */
+    /**
+     * A run that measured nothing still says so, in its own line.
+     *
+     * <p>Asked of {@link Mode#APPLY}. It used to be asked of the default mode,
+     * which produced nothing until stage 10 filled the recommending branch in;
+     * the rule being checked is about how a run that could not finish is
+     * recorded, so it moves to whichever mode still cannot finish.
+     */
     @Test
     public void aRunThatProducedNothingStillRecordsWhy() throws IOException {
         File root = folder.newFolder("results");
-        RegDriftParameters parameters = settings("movie.tif", "");
+        RegDriftParameters parameters = RegDriftParameters.builder(image("movie.tif"))
+                .mode(Mode.APPLY)
+                .build();
         RegDriftResult result = RegDrift.run(parameters);
         assertFalse(result.isSuccess());
 
@@ -310,6 +352,7 @@ public class AutoSaveTest {
                 .channel(1)
                 .localisability(0.081)
                 .measuredAtBin(4)
+                .brightFraction(0.10)
                 .driftRatePx(0.42)
                 .motionLabel("DRIFT")
                 .motionDominant("DRIFT")

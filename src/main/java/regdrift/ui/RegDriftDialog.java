@@ -16,6 +16,7 @@ import regdrift.RegDriftMacroOptions;
 import regdrift.Slice;
 import regdrift.WindowFrames;
 import regdrift.Windows;
+import regdrift.advise.CalibrationTable;
 import regdrift.autofix.AutofixService;
 import sc.fiji.oc3d.core.ui.CollapsiblePane;
 import sc.fiji.oc3d.core.ui.ToggleSwitch;
@@ -118,6 +119,7 @@ public abstract class RegDriftDialog {
 
     private DialogForm.Radios modeRadios;
     private JLabel modeHelp;
+    private JLabel calibrationNote;
     private CollapsiblePane advanced;
 
     private JComboBox<String> enginesCombo;
@@ -388,6 +390,7 @@ public abstract class RegDriftDialog {
         form.addHeader("Analysis");
         modeRadios = form.addRadios(modeLabels(), labelOf(initialMode()));
         modeHelp = form.addHelpText(helpForMode(initialMode()));
+        calibrationNote = form.addNote(calibrationNoteFor(initialMode()));
         modeRadios.onChange(new Runnable() {
             @Override public void run() {
                 modeChanged();
@@ -433,8 +436,33 @@ public abstract class RegDriftDialog {
     private void modeChanged() {
         Mode mode = mode();
         modeHelp.setText(DialogForm.wrapped(helpForMode(mode)));
+        String note = calibrationNoteFor(mode);
+        calibrationNote.setText(DialogForm.wrapped(note));
+        calibrationNote.setVisible(!note.isEmpty());
         modeExtrasChanged(mode);
         form.repack();
+    }
+
+    /**
+     * What a mode that ranks engines says about the table it ranks them from -
+     * defect D10.
+     *
+     * <p>Beside the control that turns ranking on, not in a manual and not in a
+     * footnote. The ranking is a lookup in measurements taken on three
+     * phase-contrast frames from one instrument, and a reader who is not told
+     * that will read it as a general statement about registration software. The
+     * sentence itself lives with the table, in
+     * {@link regdrift.advise.CalibrationTable}, so the dialog, the saved notes
+     * and the recommendation table cannot end up carrying three versions of it.
+     *
+     * <p>Empty for a mode that ranks nothing, because a calibration note beside
+     * a measurement that consults no table is noise.
+     */
+    public static String calibrationNoteFor(Mode mode) {
+        if (mode == Mode.DIAGNOSE || mode == Mode.SCORE) return "";
+        return CalibrationTable.CALIBRATION_SET
+                + " A recording unlike those is marked outside_calibrated_range, with the reason,"
+                + " rather than being fitted to the nearest thing that was measured.";
     }
 
     // ------------------------------------------------------------- the output

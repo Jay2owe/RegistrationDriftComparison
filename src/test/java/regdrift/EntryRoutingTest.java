@@ -15,6 +15,7 @@ import ij.process.ByteProcessor;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+import regdrift.autofix.EngineId;
 import regdrift.ui.CompareDialog;
 import regdrift.ui.DiagnosticsDialog;
 import regdrift.ui.ImageChoices;
@@ -32,6 +33,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -132,19 +134,63 @@ public class EntryRoutingTest {
     }
 
     /**
-     * A mode this build does not carry out yet still says so exactly once, with
-     * no window, when a macro asked for no windows.
+     * The recommending mode measures, ranks and opens nothing, on a Fiji with no
+     * registration engine installed.
      *
-     * <p>The half of the gate item above that outlived the diagnose branch being
-     * filled in: the rule is that a reason is given once, not twice, and it
-     * needs a mode that still has a reason to give.
+     * <p>Gate item 6 of stage 10, run without a person: no engine is present in
+     * a test JVM, so every engine comes back absent with what installing it
+     * would cost, and <b>nothing is fetched to produce that</b>. The recording is
+     * an 8x8 stack of zeros, so the verdict is the warning - and a warning still
+     * gets a ranking, because whether the movement could be read and which
+     * engines the table supports are two different questions.
      */
     @Test
-    public void aHiddenMacroRunOnAnUnbuiltModeSaysItsOneThingOnce() throws Exception {
+    public void aHiddenMacroRunRanksEnginesAndInstallsNothing() throws Exception {
         Probe probe = probeFor(new RegistrationDiagnostics_());
         probe.open("movie.tif", stack(1, 1, 8));
 
         asMacro("mode=diagnose_recommend hide_display", probe, "");
+
+        assertEquals("nothing may be shown when the settings asked for no windows",
+                0, probe.loud.size());
+        assertEquals("a run that measured something reports no failure at all",
+                0, probe.quiet.size());
+        assertEquals(0, probe.shown.size());
+        assertEquals(0, probe.recorded.size());
+
+        RegDriftResult result = probe.finished.get(0);
+        assertTrue(result.failure() == null ? "" : result.failure().message(),
+                result.isSuccess());
+        assertEquals(Verdict.WARN_LOW_STRUCTURE, result.verdict());
+        assertFalse("and it ranked, which is what this mode adds", result.ranked().isEmpty());
+        assertNotNull("the ranking reaches the table too", result.recommendation());
+        assertEquals("no engine is present here, so every engine the catalogue knows about is"
+                        + " ranked rather than none of them",
+                EngineId.values().length, result.ranked().size());
+        for (Recommendation row : result.ranked()) {
+            assertNotEquals("nothing can be present in a JVM with no Fiji around it, and nothing"
+                            + " was fetched to make one present - house rule 9",
+                    Recommendation.Presence.PRESENT, row.presence());
+        }
+        assertEquals("rank 1 is rank 1, counted from one", 1, result.ranked().get(0).rank());
+    }
+
+    /**
+     * A mode this build does not carry out yet still says so exactly once, with
+     * no window, when a macro asked for no windows.
+     *
+     * <p>The half of the gate item above that outlived the two measuring
+     * branches being filled in: the rule is that a reason is given once, not
+     * twice, and it needs a mode that still has a reason to give. Stage 09 moved
+     * this off {@code diagnose} and stage 10 moved it off
+     * {@code diagnose_recommend}; {@code apply} is where it sits until stage 13.
+     */
+    @Test
+    public void aHiddenMacroRunOnAnUnbuiltModeSaysItsOneThingOnce() throws Exception {
+        Probe probe = probeFor(new CompareRegistration_());
+        probe.open("movie.tif", stack(1, 1, 8));
+
+        asMacro("mode=apply hide_display", probe, "");
 
         assertEquals("nothing may be shown when the settings asked for no windows",
                 0, probe.loud.size());

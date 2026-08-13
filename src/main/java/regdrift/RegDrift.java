@@ -10,6 +10,11 @@ package regdrift;
 
 import ij.ImagePlus;
 import ij.measure.ResultsTable;
+import regdrift.advise.EngineAvailability;
+import regdrift.advise.Recommender;
+import regdrift.autofix.AutofixService;
+import regdrift.autofix.EngineId;
+import regdrift.autofix.EngineRegistry;
 import regdrift.diag.ChannelRanker;
 import regdrift.diag.Fingerprint;
 import regdrift.diag.Frames;
@@ -17,6 +22,10 @@ import regdrift.diag.MotionDescriptors;
 import regdrift.diag.WindowSampler;
 import regdrift.internal.PairScheduler;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CancellationException;
 
 /**
@@ -98,9 +107,8 @@ public final class RegDrift {
         }
         switch (parameters.mode()) {
             case DIAGNOSE:
-                return diagnose(parameters);
             case DIAGNOSE_AND_RECOMMEND:
-                return notImplemented(parameters, "10");
+                return diagnose(parameters);
             case APPLY:
                 return notImplemented(parameters, "13");
             case COMPARE:
@@ -184,8 +192,20 @@ public final class RegDrift {
     // ------------------------------------------------------------------ diagnose
 
     /**
-     * Measure the movement in one recording and say whether it can be
-     * registered.
+     * Measure the movement in one recording, say whether it can be registered,
+     * and - in {@link Mode#DIAGNOSE_AND_RECOMMEND} - name the engines the
+     * measurements support.
+     *
+     * <p>Both modes take the same measurement, because the recommendation is a
+     * lookup in a bundled table and costs nothing beyond it. What the second mode
+     * adds is a table read, a catalogue read, and the calibration flag that says
+     * whether the recording resembles what the table was measured on.
+     *
+     * <p><b>Nothing is fetched, and nothing is installed.</b> Reading which
+     * engines are here looks at classes already loaded, files already on disk and
+     * ImageJ's own command table; the single method in this plugin that can reach
+     * a network is a repair somebody presses a button for, and no path from here
+     * reaches it.
      *
      * <p>Everything here runs on this thread except the frame pairs, which go to
      * a bounded, run-owned pool inside {@link Fingerprint}. Nothing is shown,
@@ -245,24 +265,147 @@ public final class RegDrift {
                     PairScheduler.Progress.NONE, cancellation);
             regdrift.diag.Verdict verdict = regdrift.diag.Verdict.of(fingerprint);
 
-            return RegDriftResult.builder(parameters)
+            Provenance.Builder record = Provenance.builder()
+                    .pluginVersion(VERSION)
+                    .mode(parameters.mode())
+                    .channel(channel)
+                    .channelReason(channelReason)
+                    .measuredAtBin(bin.factor())
+                    .windowStarts(plan.everyConsecutivePair()
+                            ? new int[0] : plan.windowStarts())
+                    .windowFrames(plan.framesPerWindow());
+            RegDriftResult.Builder result = RegDriftResult.builder(parameters)
                     .diagnosis(diagnosisTable(ranking, fingerprint, verdict))
-                    .verdict(verdict.kind(), verdict.text())
-                    .provenance(Provenance.builder()
-                            .pluginVersion(VERSION)
-                            .mode(parameters.mode())
-                            .channel(channel)
-                            .channelReason(channelReason)
-                            .measuredAtBin(bin.factor())
-                            .windowStarts(plan.everyConsecutivePair()
-                                    ? new int[0] : plan.windowStarts())
-                            .windowFrames(plan.framesPerWindow())
-                            .build())
-                    .build();
+                    .verdict(verdict.kind(), verdict.text());
+
+            if (parameters.mode() == Mode.DIAGNOSE_AND_RECOMMEND) {
+                Candidates candidates = candidatesFor(parameters);
+                if (candidates.refusal != null) {
+                    return RegDriftResult.failed(parameters, candidates.refusal);
+                }
+                Recommender.Result advice = Recommender.rank(fingerprint, verdict,
+                        candidates.engines, candidates.availability);
+                ResultsTable table = RegDriftTables.recommendation();
+                for (Recommendation ranked : advice.ranked()) {
+                    RegDriftTables.append(table, ranked);
+                }
+                result.recommendation(table).ranked(advice.ranked());
+                record.calibrationSet(advice.calibrationSet() + " " + advice.calibrationReason()
+                                + " " + candidates.reason)
+                        .engineVersions(versionsOf(candidates));
+            }
+            return result.provenance(record.build()).build();
         } catch (CancellationException stoppedPartWay) {
             return RegDriftResult.failed(parameters, stopped());
         } finally {
             if (frames != null) frames.release();
+        }
+    }
+
+    // ---------------------------------------------------------------- recommend
+
+    /**
+     * Which engines to rank, and what this computer has of them.
+     *
+     * <p>Reading the catalogue looks at classes already loaded, files already on
+     * disk and ImageJ's own command table. <b>It fetches nothing and writes
+     * nothing</b>, which is house rule 9 and the reason a recommendation works
+     * completely on a Fiji with no registration engine installed.
+     *
+     * <p>The awkward case is that Fiji: {@code engines=installed} on a computer
+     * with none installed resolves to an empty list, and an empty recommendation
+     * table is the least useful thing this plugin could hand somebody who has
+     * just been told their recording can be registered. So an empty answer falls
+     * back to the whole catalogue, every row marked absent with what installing
+     * it would cost, and the fallback is stated in the record of the run rather
+     * than being silent.
+     */
+    private static Candidates candidatesFor(RegDriftParameters parameters) {
+        EngineAvailability availability = EngineAvailability.of(AutofixService.forThisFiji());
+        EngineSelection wanted = parameters.engines();
+        if (wanted.isNamed()) {
+            List<EngineId> named = new ArrayList<EngineId>();
+            for (String name : wanted.names()) {
+                EngineId engine = EngineRegistry.byDisplayName(name);
+                if (engine == null) {
+                    return Candidates.refused(Failure.of(Failure.Kind.INVALID_PARAMETERS,
+                            "This build does not know a registration engine called '" + name
+                                    + "'. The engines it knows about are: "
+                                    + join(EngineRegistry.displayNames()) + "."));
+                }
+                if (!named.contains(engine)) named.add(engine);
+            }
+            return new Candidates(named, availability,
+                    "Ranked the engines this run named: " + join(wanted.names()) + ".");
+        }
+        if (wanted.kind() == EngineSelection.Kind.ALL) {
+            return new Candidates(Recommender.everyEngine(), availability,
+                    "Ranked every engine this plugin knows about, present or not.");
+        }
+        List<EngineId> present = AutofixService.forThisFiji().presentEngines();
+        if (!present.isEmpty()) {
+            return new Candidates(present, availability,
+                    "Ranked the engines already present in this Fiji.");
+        }
+        return new Candidates(Recommender.everyEngine(), availability,
+                "No registration engine is present in this Fiji, so every engine this plugin knows"
+                        + " about was ranked instead, each marked absent with what installing it"
+                        + " would cost. Nothing was fetched.");
+    }
+
+    /**
+     * The versions of the engines this run found, for the saved record.
+     *
+     * <p>The version each catalogue entry pins, reported for the engines that
+     * are actually here. An engine that is absent has no version to report and
+     * is left out rather than recorded as an empty string.
+     */
+    private static Map<String, String> versionsOf(Candidates candidates) {
+        Map<String, String> versions = new LinkedHashMap<String, String>();
+        for (EngineId engine : candidates.engines) {
+            if (candidates.availability.presenceOf(engine) != Recommendation.Presence.PRESENT) {
+                continue;
+            }
+            String version = EngineRegistry.specFor(engine).attribute("version", String.class);
+            versions.put(EngineRegistry.displayName(engine),
+                    version == null || version.trim().isEmpty() ? "present" : version.trim());
+        }
+        return versions;
+    }
+
+    private static String join(List<String> names) {
+        StringBuilder out = new StringBuilder();
+        for (int i = 0; i < names.size(); i++) {
+            if (i > 0) out.append(i == names.size() - 1 ? " and " : ", ");
+            out.append(names.get(i));
+        }
+        return out.toString();
+    }
+
+    /** Which engines a run ranks, what this computer has, and why that set. */
+    private static final class Candidates {
+
+        private final List<EngineId> engines;
+        private final EngineAvailability availability;
+        private final String reason;
+        private final Failure refusal;
+
+        private Candidates(List<EngineId> engines, EngineAvailability availability, String reason) {
+            this.engines = engines;
+            this.availability = availability;
+            this.reason = reason;
+            this.refusal = null;
+        }
+
+        private Candidates(Failure refusal) {
+            this.engines = new ArrayList<EngineId>();
+            this.availability = null;
+            this.reason = "";
+            this.refusal = refusal;
+        }
+
+        static Candidates refused(Failure refusal) {
+            return new Candidates(refusal);
         }
     }
 

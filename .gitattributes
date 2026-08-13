@@ -13,3 +13,10 @@ mvnw text eol=lf
 *.png binary
 *.jpg binary
 *.zip binary
+
+# The bundled calibration is frozen evidence, and its digests are checked on
+# every build. Line-ending normalisation would change those digests on a fresh
+# checkout, so these three files are stored byte for byte as they were copied
+# out of the benchmark run that produced them. They are never edited: a better
+# benchmark is a new file with a new date in its name.
+src/main/resources/calibration/*.csv binary

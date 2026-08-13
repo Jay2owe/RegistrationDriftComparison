@@ -10,6 +10,7 @@ package regdrift;
 
 import ij.ImagePlus;
 import ij.measure.ResultsTable;
+import regdrift.advise.CeilingAdvice;
 import sc.fiji.oc3d.core.io.CsvWriter;
 
 import java.io.BufferedReader;
@@ -573,6 +574,12 @@ public final class RegDriftAutoSave {
                 ? "No calibration table was consulted by this run." : calibration));
         line(text, newline, "");
 
+        if (parameters.adviseCeiling()) {
+            line(text, newline, "INTENSITY CEILING");
+            line(text, newline, "  " + ceilingAdvice(result));
+            line(text, newline, "");
+        }
+
         line(text, newline, "MEASUREMENT SCALE");
         line(text, newline, "  The 'localisability' column is the fall in frame-to-frame");
         line(text, newline, "  correlation under a one-pixel displacement, and one pixel means");
@@ -609,6 +616,30 @@ public final class RegDriftAutoSave {
         line(text, newline, "  free with interpolation cannot flatter it.");
 
         Files.write(file.toPath(), text.toString().getBytes(StandardCharsets.UTF_8));
+    }
+
+    /**
+     * What this run has to say about an intensity ceiling, warning included -
+     * defect D4.
+     *
+     * <p>Read back out of the {@code bright_fraction} cell of the diagnosis
+     * table, so the sentence and the number a reader can check it against come
+     * from one place and cannot disagree. The warning travels with it, always,
+     * because advice about a setting that deletes the sample on the wrong
+     * modality is worse than no advice when it arrives on its own.
+     */
+    private static String ceilingAdvice(RegDriftResult result) {
+        Provenance provenance = result.provenance();
+        int channel = provenance == null ? Provenance.CHANNEL_UNRESOLVED : provenance.channel();
+        String cell = RegDriftTables.cellText(result.diagnosis(), "bright_fraction",
+                diagnosisRowFor(result.diagnosis(), channel));
+        double brightFraction;
+        try {
+            brightFraction = cell.isEmpty() ? Double.NaN : Double.parseDouble(cell);
+        } catch (NumberFormatException notANumber) {
+            brightFraction = Double.NaN;
+        }
+        return CeilingAdvice.text(brightFraction);
     }
 
     private static void line(StringBuilder text, String newline, String content) {
