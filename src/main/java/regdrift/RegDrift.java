@@ -114,7 +114,7 @@ public final class RegDrift {
             case COMPARE:
                 return notImplemented(parameters, "13");
             case SCORE:
-                return notImplemented(parameters, "12");
+                return score(parameters);
             default:
                 break;
         }
@@ -300,6 +300,161 @@ public final class RegDrift {
         } finally {
             if (frames != null) frames.release();
         }
+    }
+
+    // -------------------------------------------------------------------- score
+
+    /**
+     * Rate a recording somebody has already registered, against an
+     * interpolation-matched control.
+     *
+     * <p>Two stacks arrive: the recording as it was, and the recording after some
+     * plugin ran on it. Almost no registration plugin says what shifts it applied,
+     * so the shifts are recovered by measuring the raw frame against the
+     * registered one, and the control is then built from the <b>fractional part
+     * only</b> of each of them. That control resamples exactly as the registered
+     * recording did and takes out none of the drift, so what is reported -
+     * {@code sd_vs_control} - is the part attributable to holding the field still.
+     * <b>The raw recording's own temporal standard deviation is never computed and
+     * is nowhere in the output</b> (defect D11); scored against it, a plugin that
+     * did nothing but blur would look like a good one.
+     *
+     * <p>Where the control and the result are within noise the {@code status}
+     * column says {@code cannot_separate} rather than a figure that would be read
+     * as a ranking. That is a statement about the measurement, not about the
+     * plugin being rated - see {@link regdrift.score.Arbiter}.
+     *
+     * <p><b>Scored at native resolution.</b> The fractional part of a shift
+     * measured on binned pixels is not the fraction the engine resampled with, so
+     * the one place in this plugin that does not measure at the fingerprint's
+     * scale is this one, and it says so here rather than being discovered from a
+     * control that resampled by the wrong amount (defect D12).
+     *
+     * <p>Nothing is shown, nothing is saved, and no engine is driven: this mode
+     * judges a registration that already happened.
+     */
+    private static RegDriftResult score(RegDriftParameters parameters) {
+        ImagePlus rawImage = parameters.image();
+        ImagePlus registeredImage = parameters.compareWith();
+        Cancellation cancellation = parameters.cancellation();
+        int workers = parameters.serial() ? 1 : 0;
+        Frames raw = null;
+        Frames registered = null;
+        try {
+            Frames.Bin rankingBin = Fingerprint.binFor(rawImage.getWidth(), rawImage.getHeight());
+            ChannelRanker.Ranking ranking = ChannelRanker.rank(rawImage, rankingBin, 0, workers,
+                    PairScheduler.Progress.NONE, cancellation);
+            int channel = parameters.channel().isAuto()
+                    ? (ranking.measured() ? ranking.chosen() : 1)
+                    : parameters.channel().index();
+            String channelReason = parameters.channel().isAuto()
+                    ? ranking.reason()
+                    : "Channel " + channel + " was asked for, so no channel ranking was applied.";
+            int slice = parameters.slice().isProject()
+                    ? Frames.PROJECT_Z : parameters.slice().index();
+
+            try {
+                raw = Frames.of(rawImage, channel, slice, Frames.Bin.none());
+                registered = Frames.of(registeredImage, channel, slice, Frames.Bin.none());
+            } catch (IllegalArgumentException outsideTheImage) {
+                return RegDriftResult.failed(parameters, Failure.of(
+                        Failure.Kind.INVALID_PARAMETERS, "This pair cannot be scored as asked: "
+                                + outsideTheImage.getMessage() + "."));
+            }
+
+            regdrift.score.Arbiter.Recovered recovered;
+            regdrift.score.Arbiter.Scoring scoring;
+            try {
+                recovered = regdrift.score.Arbiter.recover(raw, registered, workers,
+                        PairScheduler.Progress.NONE, cancellation);
+                scoring = regdrift.score.Arbiter.score(raw, registered, recovered.cumulative(),
+                        regdrift.score.ControlWarp.Interpolation.BILINEAR, workers,
+                        PairScheduler.Progress.NONE, cancellation);
+            } catch (IllegalArgumentException noControl) {
+                return RegDriftResult.failed(parameters, Failure.of(Failure.Kind.SCORING_FAILED,
+                        "'" + registeredImage.getTitle() + "' cannot be scored against '"
+                                + rawImage.getTitle() + "': " + noControl.getMessage()));
+            }
+
+            Provenance record = Provenance.builder()
+                    .pluginVersion(VERSION)
+                    .mode(parameters.mode())
+                    .channel(channel)
+                    .channelReason(channelReason)
+                    .measuredAtBin(Frames.Bin.none().factor())
+                    .calibrationSet(recovered.provenance() + ". " + scoring.provenance())
+                    .build();
+            return RegDriftResult.builder(parameters)
+                    .comparison(comparisonTable(registeredImage.getTitle(), scoring, parameters))
+                    .frames(framesTable(scoring, recovered))
+                    .provenance(record)
+                    .build();
+        } catch (CancellationException stoppedPartWay) {
+            return RegDriftResult.failed(parameters, stopped());
+        } finally {
+            if (raw != null) raw.release();
+            if (registered != null) registered.release();
+        }
+    }
+
+    /**
+     * The one-row comparison table for a scored arm.
+     *
+     * <p>{@code cpu_seconds} is left unmeasured on purpose: nothing was driven
+     * here, and a zero in that column would read as an engine that cost nothing
+     * (defect D6 in spirit - a timing shown is a timing measured).
+     */
+    private static ResultsTable comparisonTable(String title,
+                                                regdrift.score.Arbiter.Scoring scoring,
+                                                RegDriftParameters parameters) {
+        ResultsTable table = RegDriftTables.comparison();
+        StringBuilder status = new StringBuilder(scoring.separation().word());
+        if (parameters.flagMotionLoss() && scoring.motion().raised()) {
+            status.append("; motion_preservation_flag");
+        }
+        RegDriftTables.comparisonRow()
+                .engine(title)
+                .settings(parameters.arbiter().macroValue() + ", "
+                        + scoring.interpolation().words() + " control")
+                .residualBefore(scoring.medianResidualBefore())
+                .residualAfter(scoring.medianResidualAfter())
+                .residualRemoved(scoring.residualRemoved())
+                .sdVsControl(scoring.sdVsControl())
+                .pathPx(scoring.pathPx())
+                .netPx(scoring.netPx())
+                .framesFlagged(scoring.framesFlagged())
+                .status(status.toString())
+                .appendTo(table);
+        return table;
+    }
+
+    /** One row per frame of the scored arm, in frame order. */
+    private static ResultsTable framesTable(regdrift.score.Arbiter.Scoring scoring,
+                                            regdrift.score.Arbiter.Recovered recovered) {
+        ResultsTable table = RegDriftTables.frames();
+        double[] before = scoring.residualBefore();
+        double[] after = scoring.residualAfter();
+        regdrift.internal.Transform[] cumulative = scoring.cumulative();
+        for (int t = 0; t < cumulative.length; t++) {
+            regdrift.internal.Transform now = cumulative[t];
+            regdrift.internal.Transform was = t == 0 ? now : cumulative[t - 1];
+            FrameStatus status = scoring.statusOf(t);
+            if (recovered.statusOf(t) == regdrift.diag.Estimator.Status.AT_SHIFT_BOUND) {
+                status = FrameStatus.AT_SHIFT_BOUND;
+            }
+            RegDriftTables.framesRow()
+                    .t(t + 1)
+                    .cumDx(now.dx)
+                    .cumDy(now.dy)
+                    .stepDx(now.dx - was.dx)
+                    .stepDy(now.dy - was.dy)
+                    .residualBefore(before[t])
+                    .residualAfter(after[t])
+                    .validFraction(scoring.validFraction())
+                    .status(status)
+                    .appendTo(table);
+        }
+        return table;
     }
 
     // ---------------------------------------------------------------- recommend

@@ -17,6 +17,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -26,8 +27,8 @@ import static org.junit.Assert.fail;
  * {@link RegDrift#run} as it stands: every mode answers, none of them throws,
  * and none of them needs an ImageJ window to be open.
  *
- * <p><b>The two measuring modes measure; the other three do not yet.</b> Each of
- * those returns a real result carrying a typed {@code not_implemented} reason
+ * <p><b>Three modes now do their work; two do not yet.</b> Each of those two
+ * returns a real result carrying a typed {@code not_implemented} reason
  * that names the build stage the branch arrives in, which is what let stage 04
  * build the dialog and click through it before an estimator existed. As each
  * stage lands, the assertion for its mode changes from "says which stage" to
@@ -53,7 +54,48 @@ public class FacadeTest {
     public void everyModeAnswersWithTheStageItArrivesIn() {
         assertNotImplemented(Mode.APPLY, "13");
         assertNotImplemented(Mode.COMPARE, "13");
-        assertNotImplemented(Mode.SCORE, "12");
+        for (Mode mode : Mode.values()) {
+            if (mode == Mode.APPLY || mode == Mode.COMPARE) continue;
+            RegDriftResult result = RegDrift.run(requestFor(mode));
+            if (result.failure() == null) continue;
+            assertNotEquals("mode " + mode.macroValue() + " has been built, so it must not be"
+                            + " naming a build stage any more", Failure.Kind.NOT_IMPLEMENTED,
+                    result.failure().kind());
+        }
+    }
+
+    /**
+     * Stage 12 moved {@link Mode#SCORE} across: it rates a registration rather
+     * than naming the stage it was waiting for.
+     *
+     * <p>The recording here is eight pixels square and uniformly black, which is
+     * the honest hard case: there is nothing in it to measure a shift from, so the
+     * shifts recovered are all zero, and a control built from them would resample
+     * nothing at all. That is exactly the state defect D11 warns about - a control
+     * that is an identity warp leaves {@code sd_vs_control} measuring the raw
+     * recording and flatters every method - so the run <b>refuses</b> and says
+     * which. It does not quietly score against the raw recording, and it does not
+     * come back saying the mode is unbuilt.
+     *
+     * <p>What the mode produces on a recording that does carry structure is
+     * {@code regdrift.score.ArbiterControlTest}'s business.
+     */
+    @Test
+    public void scoreModeRatesRatherThanNamingAStage() {
+        RegDriftResult result = RegDrift.run(requestFor(Mode.SCORE));
+
+        assertNotNull(result.failure());
+        assertEquals("a recording with nothing in it cannot be scored, and the reason is typed",
+                Failure.Kind.SCORING_FAILED, result.failure().kind());
+        assertFalse("and it is not the not-implemented reason any more",
+                result.failure().message().startsWith(RegDrift.NOT_IMPLEMENTED_PREFIX));
+        assertTrue("the refusal names the defect it is protecting: "
+                        + result.failure().message(),
+                result.failure().message().contains("identity warp is not a control"));
+        assertTrue("and says what it would otherwise have measured: "
+                        + result.failure().message(),
+                result.failure().message().contains("sd_vs_control"));
+        assertEquals(Mode.SCORE, result.parameters().mode());
     }
 
     /** The one mode that measures, answering with a measurement rather than a reason. */
