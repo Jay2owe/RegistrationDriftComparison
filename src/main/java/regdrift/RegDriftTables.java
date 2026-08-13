@@ -56,7 +56,7 @@ public final class RegDriftTables {
             number("wander"),
             number("step_rms_px"),
             number("step_max_px"),
-            number("knocks"),
+            number("knock_present"),
             number("log2_trend"),
             number("bright_fraction"),
             number("agreement_px"),
@@ -300,9 +300,23 @@ public final class RegDriftTables {
             return (DiagnosisRow) put("step_max_px", stepMaxPx);
         }
 
-        /** How many steps were grossly inconsistent with their neighbors. */
-        public DiagnosisRow knocks(int knocks) {
-            return (DiagnosisRow) put("knocks", knocks);
+        /**
+         * Whether any step was grossly inconsistent with its neighbors: 1 when at
+         * least one was, 0 when none was.
+         *
+         * <p><b>Presence, and never a count.</b> The column was called
+         * {@code knocks} and documented as a count until stage 08. A knock is a
+         * step larger than three pixels or six times the typical step, whichever
+         * is bigger, and the typical step is computed over whatever frame pairs
+         * were sampled - so the threshold moves when the sample moves and the
+         * count moves with it. One library recording read one, two, four and seven
+         * knocks across six samplings of itself; presence was stable across all
+         * six. The column was renamed rather than quietly filled with 1 and 0,
+         * because a column headed {@code knocks} holding {@code 1} reads as
+         * "exactly one knock", which is the claim being withdrawn. See defect D13.
+         */
+        public DiagnosisRow knockPresent(boolean knockPresent) {
+            return (DiagnosisRow) put("knock_present", knockPresent ? 1 : 0);
         }
 
         /** Fitted global intensity change across the recording, in log2 units. */

@@ -34,9 +34,9 @@ public class TablesTest {
 
     private static final List<String> DIAGNOSIS = Arrays.asList(
             "channel", "localisability", "measured_at_bin", "frame_correlation", "drift_rate_px",
-            "bridge_max_px", "bridge_span", "wander", "step_rms_px", "step_max_px", "knocks",
-            "log2_trend", "bright_fraction", "agreement_px", "motion_label", "motion_dominant",
-            "severity", "verdict");
+            "bridge_max_px", "bridge_span", "wander", "step_rms_px", "step_max_px",
+            "knock_present", "log2_trend", "bright_fraction", "agreement_px", "motion_label",
+            "motion_dominant", "severity", "verdict");
 
     private static final List<String> RECOMMENDATION = Arrays.asList(
             "engine", "rank", "reason", "expected_error_px", "expected_seconds", "calibration",
@@ -133,7 +133,7 @@ public class TablesTest {
                 .wander(0.7)
                 .stepRmsPx(1.25)
                 .stepMaxPx(9.0)
-                .knocks(3)
+                .knockPresent(true)
                 .log2Trend(-0.4)
                 .brightFraction(0.02)
                 .agreementPx(0.15)
@@ -277,13 +277,34 @@ public class TablesTest {
     @Test
     public void aWholeNumberReadsBackWithoutADecimalTail() {
         ResultsTable table = RegDriftTables.diagnosis();
-        RegDriftTables.diagnosisRow().channel(2).knocks(3).localisability(0.081)
+        RegDriftTables.diagnosisRow().channel(2).knockPresent(true).localisability(0.081)
                 .motionLabel("JITTER").appendTo(table);
 
         assertEquals("2", RegDriftTables.cellText(table, "channel", 0));
-        assertEquals("3", RegDriftTables.cellText(table, "knocks", 0));
+        assertEquals("1", RegDriftTables.cellText(table, "knock_present", 0));
         assertEquals("0.081", RegDriftTables.cellText(table, "localisability", 0));
         assertEquals("JITTER", RegDriftTables.cellText(table, "motion_label", 0));
+    }
+
+    /**
+     * The knock column holds presence, and says so in its name.
+     *
+     * <p>Stage 03 fixed the column set from a contract that called this column
+     * {@code knocks} and documented it as a count. Stage 08 measured that the
+     * count is a statistic of whichever frame pairs happened to be sampled rather
+     * than of the recording - one library recording read one, two, four and seven
+     * knocks across six samplings of itself - and renamed the column instead of
+     * writing 1 and 0 under a heading that still says "count". Defect D13.
+     */
+    @Test
+    public void theKnockColumnReportsPresenceAndIsNamedForIt() {
+        assertTrue(RegDriftTables.DIAGNOSIS_COLUMNS.contains("knock_present"));
+        assertFalse("a column headed knocks reads as a count, which is the claim D13 withdrew",
+                RegDriftTables.DIAGNOSIS_COLUMNS.contains("knocks"));
+
+        ResultsTable table = RegDriftTables.diagnosis();
+        RegDriftTables.diagnosisRow().channel(1).knockPresent(false).appendTo(table);
+        assertEquals("0", RegDriftTables.cellText(table, "knock_present", 0));
     }
 
     /** Every frame status is a word the frames table can hold and read back. */
