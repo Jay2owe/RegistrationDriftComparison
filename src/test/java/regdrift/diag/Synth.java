@@ -66,6 +66,56 @@ final class Synth {
         return 2000.0 + 600.0 * s;
     }
 
+    /**
+     * A smoothed random field: broadband, with structure at every scale down to a few pixels.
+     *
+     * <p><b>Why a second fixture exists at all.</b> {@link #frame} is a handful of sinusoids, which
+     * is ideal for a search that slides one frame over another and useless for one that normalises
+     * every frequency to equal weight: phase correlation needs a broad spectrum to localise
+     * anything, and on a three-tone image it cannot get within a pixel of a 4 px shift. That is a
+     * documented property of the method, not a defect, so any test comparing the two estimators has
+     * to be built on content that both of them can actually read.
+     *
+     * <p>Cut two overlapping windows out of one of these with {@link #crop} and the displacement
+     * between them is exact by construction, with nothing interpolated and no formula either
+     * estimator could be in sympathy with.
+     *
+     * @param passes how much fine detail survives. Too much smoothing and the finest feature is
+     *               coarser than the border taper a transform applies, at which point the taper is
+     *               the dominant structure, it does not move, and the correlation peak sits at zero
+     */
+    static float[] texture(int w, int h, long seed, int passes) {
+        java.util.Random rng = new java.util.Random(seed);
+        float[] f = new float[w * h];
+        for (int i = 0; i < f.length; i++) f[i] = (float) (128 + 40 * rng.nextGaussian());
+        for (int pass = 0; pass < passes; pass++) {
+            float[] t = f.clone();
+            for (int y = 1; y < h - 1; y++) {
+                for (int x = 1; x < w - 1; x++) {
+                    f[y * w + x] = (t[y * w + x] * 4
+                            + t[y * w + x - 1] + t[y * w + x + 1]
+                            + t[(y - 1) * w + x] + t[(y + 1) * w + x]) / 8f;
+                }
+            }
+        }
+        return f;
+    }
+
+    /**
+     * A {@code w x h} window cut out of a larger field at {@code (ox, oy)}.
+     *
+     * <p>Sign convention as everywhere else: content at {@code p} in a window cut at
+     * {@code (ox, oy)} sits at {@code p + d} in one cut at {@code (ox - dx, oy - dy)}, so moving the
+     * crop origin by minus the shift produces a frame whose content has moved by the shift.
+     */
+    static float[] crop(float[] field, int fieldWidth, int ox, int oy, int w, int h) {
+        float[] out = new float[w * h];
+        for (int y = 0; y < h; y++) {
+            System.arraycopy(field, (y + oy) * fieldWidth + ox, out, y * w, w);
+        }
+        return out;
+    }
+
     /** A wide, smooth Gaussian bump. High frame correlation, nothing to localise. */
     static float[] blob(int w, int h) {
         float[] out = new float[w * h];
