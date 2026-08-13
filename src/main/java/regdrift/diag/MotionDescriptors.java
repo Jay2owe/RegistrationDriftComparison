@@ -220,6 +220,32 @@ public final class MotionDescriptors {
     }
 
     /**
+     * Describe a trace one named estimator produced, when the caller has the
+     * displacements in hand rather than a whole {@link Estimators.Result}.
+     *
+     * <p>What the caller usually has in hand, and the reason this overload
+     * exists: displacements converted out of the scale they were <em>measured</em>
+     * at and back into the image's own pixels. Every threshold on this class -
+     * {@link #KNOCK_FLOOR_PX}, {@link #MILD_PX}, {@link #MODERATE_PX},
+     * {@link #SEVERE_PX} - came from a survey that binned its frames to estimate
+     * and then multiplied the displacements back by the binning factor before
+     * describing them ({@code MotionSurvey.java:185, :202}). They are therefore
+     * <b>native-pixel thresholds</b>, and handing this class binned displacements
+     * would shift every severity and every knock decision by the binning factor.
+     * See defect D12: it is the same error in a second place.
+     *
+     * @param source which estimator produced them, for the provenance
+     */
+    public static MotionDescriptors of(WindowSampler.Plan plan,
+                                       List<Estimator.Displacement> perPair, Source source) {
+        if (source == null) {
+            throw new IllegalArgumentException("a trace is built from one named estimator; there"
+                    + " is no unnamed one");
+        }
+        return of(plan, perPair, source.word());
+    }
+
+    /**
      * Describe the movement one of the two estimators saw, taken from a run of
      * both.
      *

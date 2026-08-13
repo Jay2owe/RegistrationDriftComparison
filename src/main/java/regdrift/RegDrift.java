@@ -9,6 +9,15 @@
 package regdrift;
 
 import ij.ImagePlus;
+import ij.measure.ResultsTable;
+import regdrift.diag.ChannelRanker;
+import regdrift.diag.Fingerprint;
+import regdrift.diag.Frames;
+import regdrift.diag.MotionDescriptors;
+import regdrift.diag.WindowSampler;
+import regdrift.internal.PairScheduler;
+
+import java.util.concurrent.CancellationException;
 
 /**
  * The public Java entry point: measure one recording and hand back what was
@@ -89,7 +98,7 @@ public final class RegDrift {
         }
         switch (parameters.mode()) {
             case DIAGNOSE:
-                return notImplemented(parameters, "09");
+                return diagnose(parameters);
             case DIAGNOSE_AND_RECOMMEND:
                 return notImplemented(parameters, "10");
             case APPLY:
@@ -170,6 +179,166 @@ public final class RegDrift {
                     + " size and the same length.");
         }
         return null;
+    }
+
+    // ------------------------------------------------------------------ diagnose
+
+    /**
+     * Measure the movement in one recording and say whether it can be
+     * registered.
+     *
+     * <p>Everything here runs on this thread except the frame pairs, which go to
+     * a bounded, run-owned pool inside {@link Fingerprint}. Nothing is shown,
+     * nothing is saved and nothing is installed.
+     *
+     * <p><b>The scale is chosen before anything is measured</b> and is written
+     * into every row and into the provenance - see
+     * {@link Fingerprint#binFor(int, int)} and defect D12.
+     *
+     * <p>One row per channel, as the contract's {@code Diagnosis} table says.
+     * The channel the movement was measured on carries every column; the others
+     * carry the four the channel ranking measures for all of them - the channel,
+     * its localisability, the scale, and its frame correlation - and nothing
+     * else, because nothing else was measured on them. The two localisability
+     * figures come from different pair sets on purpose: the ranking scores every
+     * channel on a strided handful of pairs to stay cheap, and the estimation
+     * channel is then re-measured over the pairs the fingerprint actually used,
+     * which is the number the verdict quotes.
+     *
+     * <p><b>Not yet acted on here:</b> {@link RegDriftParameters#useRoi()}. An
+     * ROI restricting which pixels vote needs {@link Frames} to carry one, and
+     * {@code Frames} does not; the setting is carried through the request and
+     * the record and changes nothing about the measurement. Stated rather than
+     * left to be discovered from a diagnosis that quietly measured the whole
+     * frame.
+     */
+    private static RegDriftResult diagnose(RegDriftParameters parameters) {
+        ImagePlus image = parameters.image();
+        Frames.Bin bin = Fingerprint.binFor(image.getWidth(), image.getHeight());
+        Cancellation cancellation = parameters.cancellation();
+        int workers = parameters.serial() ? 1 : 0;
+        Frames frames = null;
+        try {
+            ChannelRanker.Ranking ranking = ChannelRanker.rank(image, bin, 0, workers,
+                    PairScheduler.Progress.NONE, cancellation);
+            int channel = parameters.channel().isAuto()
+                    ? (ranking.measured() ? ranking.chosen() : 1)
+                    : parameters.channel().index();
+            String channelReason = parameters.channel().isAuto()
+                    ? ranking.reason()
+                    : "Channel " + channel + " was asked for, so no channel ranking was applied.";
+            int slice = parameters.slice().isProject()
+                    ? Frames.PROJECT_Z : parameters.slice().index();
+
+            try {
+                frames = Frames.of(image, channel, slice, bin);
+            } catch (IllegalArgumentException outsideTheImage) {
+                return RegDriftResult.failed(parameters, Failure.of(
+                        Failure.Kind.INVALID_PARAMETERS, "'" + image.getTitle()
+                                + "' cannot be measured as asked: " + outsideTheImage.getMessage()
+                                + "."));
+            }
+
+            WindowSampler.Plan plan = samplerFor(parameters, frames.count())
+                    .plan(frames.count());
+            Fingerprint fingerprint = Fingerprint.measure(frames, plan, workers,
+                    PairScheduler.Progress.NONE, cancellation);
+            regdrift.diag.Verdict verdict = regdrift.diag.Verdict.of(fingerprint);
+
+            return RegDriftResult.builder(parameters)
+                    .diagnosis(diagnosisTable(ranking, fingerprint, verdict))
+                    .verdict(verdict.kind(), verdict.text())
+                    .provenance(Provenance.builder()
+                            .pluginVersion(VERSION)
+                            .mode(parameters.mode())
+                            .channel(channel)
+                            .channelReason(channelReason)
+                            .measuredAtBin(bin.factor())
+                            .windowStarts(plan.everyConsecutivePair()
+                                    ? new int[0] : plan.windowStarts())
+                            .windowFrames(plan.framesPerWindow())
+                            .build())
+                    .build();
+        } catch (CancellationException stoppedPartWay) {
+            return RegDriftResult.failed(parameters, stopped());
+        } finally {
+            if (frames != null) frames.release();
+        }
+    }
+
+    /**
+     * The sampler this request asks for: the measured default unless the caller
+     * named a shape, and every consecutive pair when the caller asked for that.
+     */
+    private static WindowSampler samplerFor(RegDriftParameters parameters, int frameCount) {
+        Windows windows = parameters.windows();
+        if (windows.isAllPairs()) return WindowSampler.everyConsecutivePair();
+        int perWindow = Math.max(2, parameters.windowFrames().resolvedFor(frameCount));
+        return WindowSampler.of(Math.max(1, windows.resolvedCount()), perWindow);
+    }
+
+    /**
+     * One row per channel, in channel order, with the estimation channel's row
+     * filled all the way.
+     */
+    private static ResultsTable diagnosisTable(ChannelRanker.Ranking ranking,
+                                               Fingerprint fingerprint,
+                                               regdrift.diag.Verdict verdict) {
+        ResultsTable table = RegDriftTables.diagnosis();
+        ChannelRanker.ChannelQuality[] ranked = ranking.channels();
+        int channels = ranked.length;
+        for (int c = 1; c <= channels; c++) {
+            ChannelRanker.ChannelQuality quality = null;
+            for (int i = 0; i < ranked.length; i++) {
+                if (ranked[i].channel() == c) quality = ranked[i];
+            }
+            if (c != fingerprint.channel()) {
+                RegDriftTables.diagnosisRow()
+                        .channel(c)
+                        .localisability(quality == null
+                                ? Double.NaN : quality.localisability().value())
+                        .measuredAtBin(ranking.measuredAt().factor())
+                        .frameCorrelation(quality == null
+                                ? Double.NaN : quality.frameCorrelation())
+                        .appendTo(table);
+                continue;
+            }
+            appendMeasuredRow(table, fingerprint, verdict);
+        }
+        if (fingerprint.channel() > channels) {
+            // A channel the ranking did not cover, which only happens if the two disagree about
+            // how many there are. The measured row is the one that must not be lost.
+            appendMeasuredRow(table, fingerprint, verdict);
+        }
+        return table;
+    }
+
+    /** The estimation channel's row: every column the fingerprint measured. */
+    private static void appendMeasuredRow(ResultsTable table, Fingerprint fingerprint,
+                                          regdrift.diag.Verdict verdict) {
+        MotionDescriptors motion = fingerprint.motion();
+        RegDriftTables.DiagnosisRow row = RegDriftTables.diagnosisRow()
+                .channel(fingerprint.channel())
+                .localisability(fingerprint.localisability().value())
+                .measuredAtBin(fingerprint.measuredAt().factor())
+                .frameCorrelation(fingerprint.frameCorrelation())
+                .log2Trend(fingerprint.log2Trend())
+                .brightFraction(fingerprint.brightFraction())
+                .agreementPx(fingerprint.agreementPx())
+                .verdict(verdict.kind());
+        if (motion != null) {
+            row.driftRatePx(motion.driftRatePx())
+                    .bridgeMaxPx(motion.bridgeMaxPx())
+                    .bridgeSpan(motion.bridgeSpan())
+                    .wander(motion.wander())
+                    .stepRmsPx(motion.stepRmsPx())
+                    .stepMaxPx(motion.stepMaxPx())
+                    .knockPresent(motion.knockPresent())
+                    .motionLabel(motion.label().render())
+                    .motionDominant(motion.label().dominantWord())
+                    .severity(motion.severity().word());
+        }
+        row.appendTo(table);
     }
 
     /**

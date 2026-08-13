@@ -92,7 +92,7 @@ nice-to-have.
 | D9 | `workersFor` overflows `int`, goes negative, and silently forces the run serial | 06 |
 | D10 | The calibration is three IncuCyte phase-contrast seeds and must say so beside every recommendation | 10 |
 | D11 | Bilinear interpolation lowers temporal SD for free; every arm is scored against a fractional-shift control | 12 |
-| D12 | **Known open.** The localisability threshold is scale-specific and does not transfer to native-resolution pixels | 09 owns the decision; 06 parameterises the measurement |
+| D12 | **Open, and now stated in the open.** Stage 09 fixed the measurement scale — the survey's own bin 4, recovered by inverting `motion_survey.csv` — and measured that this does not rescue the threshold: at bins 1, 2, 4 and 8 no cut separates the recordings that register from the recordings that do not. So localisability is reported with `measured_at_bin` beside it and **is not thresholded**; `warn_low_structure` is not issued on the strength of it. The verdict routes on estimator agreement instead. Evidence: `docs/D12_MEASUREMENT.md` | 09 decided; 15 re-tests; widening the calibration is v0.2.0 |
 | D13 | Knock *count* is a statistic of the sample, not of the recording; the compound label must be an unordered set | 08 |
 
 ## Stage map
@@ -171,11 +171,12 @@ CPC standard.
 
 ## Known open questions
 
-Carried from `03_BUILD_PLAN.md`. Only D12 blocks a stage.
+Carried from `03_BUILD_PLAN.md`. D12 no longer blocks a stage; it is answered as far as this data can answer it, and what is left is a calibration question.
 
 | Question | Owner stage |
 |---|---|
-| **At what effective pixel size is localisability measured?** (D12) The shipped `WARN_BELOW = 0.05` is calibrated on binned frames; on the twelve unbinned library entries eleven fall below it and two read negative | **09** — must be built with the scale explicit and the threshold's status stated, never silently worked around |
+| **At what effective pixel size is localisability measured?** (D12) **Answered: bin 4**, the motion survey's own factor, recovered from `motion_survey.csv` and written into `measured_at_bin` beside every value. Stage 09 | **09 — done** |
+| **Does any threshold on localisability separate recordings that register from recordings that do not?** **Measured: no**, at bin 1, 2, 4 or 8, across the twelve library entries. Rank correlation with the reduction in temporal standard deviation is +0.51 at bin 1 and +0.13 at bin 4. So the number is reported and not thresholded, and `warn_low_structure` is not issued on it. Closing this needs localisability measured against registration outcome **across instruments and modalities**, not twelve recordings from one | **v0.2.0.** 15 re-tests that nothing regressed |
 | Do knock-presence and the unordered component set survive a pre-registered re-run? They were applied to the T4 run after the fact | 08 implements; 15 re-runs |
 | Can the arbiter rank arms of similar quality, or only arms differing by 100×? | 12 builds; 15 measures |
 | Which engines can be driven repeatedly in one session without leaking threads? | 11, one engine at a time. The answer sets which arms are drive-once-per-session |

@@ -26,11 +26,14 @@ import static org.junit.Assert.fail;
  * {@link RegDrift#run} as it stands: every mode answers, none of them throws,
  * and none of them needs an ImageJ window to be open.
  *
- * <p>No mode measures anything yet. Each returns a real result carrying a typed
- * {@code not_implemented} reason that names the build stage the branch arrives
- * in, which is what lets stage 04 build the dialog and click through it before
- * an estimator exists. As each stage lands, the assertion for its mode changes
- * from "says which stage" to "measured something", one mode at a time.
+ * <p><b>Diagnose measures; the other four do not yet.</b> Each of those returns a
+ * real result carrying a typed {@code not_implemented} reason that names the
+ * build stage the branch arrives in, which is what let stage 04 build the dialog
+ * and click through it before an estimator existed. As each stage lands, the
+ * assertion for its mode changes from "says which stage" to "measured
+ * something", one mode at a time; stage 09 moved {@link Mode#DIAGNOSE} across.
+ * What diagnose measures is {@code DiagnoseModeTest}'s business, not this
+ * file's - here it only has to answer.
  *
  * <p>Nothing here opens a window, and nothing here is running inside a Fiji. The
  * whole test class is the demonstration for that half of the promise; the other
@@ -41,21 +44,37 @@ public class FacadeTest {
 
     @Test
     public void everyModeAnswersWithTheStageItArrivesIn() {
-        assertNotImplemented(Mode.DIAGNOSE, "09");
         assertNotImplemented(Mode.DIAGNOSE_AND_RECOMMEND, "10");
         assertNotImplemented(Mode.APPLY, "13");
         assertNotImplemented(Mode.COMPARE, "13");
         assertNotImplemented(Mode.SCORE, "12");
     }
 
-    /** Five modes, five branches. A mode with no branch must not slip through. */
+    /** The one mode that measures, answering with a measurement rather than a reason. */
+    @Test
+    public void diagnoseModeMeasuresRatherThanNamingAStage() {
+        RegDriftResult result = RegDrift.run(requestFor(Mode.DIAGNOSE));
+
+        assertNull("diagnose was filled in by stage 09", result.failure());
+        assertNotNull("so it answers with a verdict", result.verdict());
+        assertNotNull(result.diagnosis());
+        assertNotNull("and with the record of what it did", result.provenance());
+        assertTrue("which states the scale it measured at, always - see defect D12",
+                result.provenance().measuredAtBin() >= 1);
+    }
+
+    /**
+     * Five modes, five branches. A mode with no branch must not slip through -
+     * whether it answers with a measurement or with the stage it arrives in.
+     */
     @Test
     public void everyModeInTheEnumHasABranch() {
         for (Mode mode : Mode.values()) {
             RegDriftResult result = RegDrift.run(requestFor(mode));
             assertNotNull("mode " + mode + " returned nothing at all", result);
-            assertNotNull("mode " + mode + " returned an empty result rather than a reason",
-                    result.failure());
+            assertTrue("mode " + mode + " returned an empty result rather than either a"
+                            + " measurement or a reason",
+                    result.failure() != null || result.verdict() != null);
         }
         assertEquals("five modes are wired here and in the dialog", 5, Mode.values().length);
     }

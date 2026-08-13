@@ -101,15 +101,50 @@ public class EntryRoutingTest {
 
     /**
      * The gate item that can be run without a person: a diagnose line with
-     * {@code hide_display} shows no window and comes back with the typed
-     * not-implemented reason, said once.
+     * {@code hide_display} measures the recording, opens nothing and says
+     * nothing.
+     *
+     * <p>Stage 09 filled the diagnose branch in, so this run now comes back with
+     * a measurement rather than with a not-implemented reason. The recording is
+     * an 8x8 stack of zeros, which neither estimator can read, so the verdict is
+     * the warning - and a warning is still a finished run: nothing refuses, and
+     * nothing is reported to the user as an error. Defect D7.
      */
     @Test
-    public void aHiddenMacroRunSaysTheOneThingItHasToSayAndOpensNothing() throws Exception {
+    public void aHiddenMacroRunMeasuresTheRecordingAndOpensNothing() throws Exception {
         Probe probe = probeFor(new RegistrationDiagnostics_());
         probe.open("movie.tif", stack(1, 1, 8));
 
         asMacro("mode=diagnose hide_display", probe, "");
+
+        assertEquals("nothing may be shown when the settings asked for no windows",
+                0, probe.loud.size());
+        assertEquals("a run that measured something reports no failure at all",
+                0, probe.quiet.size());
+        assertEquals(0, probe.shown.size());
+        assertEquals(0, probe.recorded.size());
+
+        RegDriftResult result = probe.finished.get(0);
+        assertTrue(result.failure() == null ? "" : result.failure().message(),
+                result.isSuccess());
+        assertEquals(Verdict.WARN_LOW_STRUCTURE, result.verdict());
+        assertNotNull("and the diagnosis table is filled in", result.diagnosis());
+    }
+
+    /**
+     * A mode this build does not carry out yet still says so exactly once, with
+     * no window, when a macro asked for no windows.
+     *
+     * <p>The half of the gate item above that outlived the diagnose branch being
+     * filled in: the rule is that a reason is given once, not twice, and it
+     * needs a mode that still has a reason to give.
+     */
+    @Test
+    public void aHiddenMacroRunOnAnUnbuiltModeSaysItsOneThingOnce() throws Exception {
+        Probe probe = probeFor(new RegistrationDiagnostics_());
+        probe.open("movie.tif", stack(1, 1, 8));
+
+        asMacro("mode=diagnose_recommend hide_display", probe, "");
 
         assertEquals("nothing may be shown when the settings asked for no windows",
                 0, probe.loud.size());
