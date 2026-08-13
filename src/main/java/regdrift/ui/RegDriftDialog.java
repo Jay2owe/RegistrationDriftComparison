@@ -16,6 +16,7 @@ import regdrift.RegDriftMacroOptions;
 import regdrift.Slice;
 import regdrift.WindowFrames;
 import regdrift.Windows;
+import regdrift.autofix.AutofixService;
 import sc.fiji.oc3d.core.ui.CollapsiblePane;
 import sc.fiji.oc3d.core.ui.ToggleSwitch;
 
@@ -107,6 +108,7 @@ public abstract class RegDriftDialog {
 
     private final DialogForm form;
     private final ImageChoices choices;
+    private final AutofixService engines;
 
     private JComboBox<String> imageCombo;
     private JLabel shapeLine;
@@ -134,8 +136,27 @@ public abstract class RegDriftDialog {
      * @param choices the recordings this dialog can offer
      */
     protected RegDriftDialog(String title, ImageChoices choices) {
+        this(title, choices, null);
+    }
+
+    /**
+     * As above, with the engine service the Engines section reads from.
+     *
+     * <p>Assigned before the section hooks run, which is what lets a subclass
+     * that has an Engines section reach it from {@link #addSectionsAfterAnalysis()}
+     * - a subclass field would still be unassigned at that point. A dialog
+     * without that section never asks for it, and asking is what triggers the
+     * reading of this computer, so the dialog that has no Engines section reads
+     * nothing.
+     *
+     * @param title   the window title, which carries the display name
+     * @param choices the recordings this dialog can offer
+     * @param engines where the Engines section gets its rows, or null for this Fiji
+     */
+    protected RegDriftDialog(String title, ImageChoices choices, AutofixService engines) {
         this.form = new DialogForm(title);
         this.choices = choices == null ? ImageChoices.none() : choices;
+        this.engines = engines;
         buildInput();
         buildAnalysis();
         addSectionsAfterAnalysis();
@@ -189,6 +210,17 @@ public abstract class RegDriftDialog {
     /** The recordings this dialog was offered. */
     protected ImageChoices choices() {
         return choices;
+    }
+
+    /**
+     * The engine service this dialog reads from.
+     *
+     * <p>Falls back to the one that reads this Fiji, built once and shared, so
+     * that opening the dialog twice does not read every class and every file
+     * twice.
+     */
+    protected AutofixService engines() {
+        return engines == null ? AutofixService.forThisFiji() : engines;
     }
 
     // ------------------------------------------------------------- the result

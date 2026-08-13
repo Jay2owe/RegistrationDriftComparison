@@ -11,6 +11,7 @@ package regdrift.ui;
 import regdrift.Arbiter;
 import regdrift.Mode;
 import regdrift.RegDriftMacroOptions;
+import regdrift.autofix.AutofixService;
 import sc.fiji.oc3d.core.ui.ToggleSwitch;
 
 import javax.swing.JComboBox;
@@ -33,9 +34,10 @@ import javax.swing.JTextField;
  *       is rating.</li>
  * </ul>
  *
- * <p>The Engines section lists what this plugin will look for and says that this
- * build has not looked. See {@link EnginesPlaceholder} for why it is worded that
- * way rather than left out.
+ * <p>The Engines section reports what was found on this computer for each
+ * registration engine, and offers a repair on the rows a person can repair from
+ * here. Drawing it reads the machine and opens no connection; see
+ * {@link EnginePanel}.
  */
 public final class CompareDialog extends RegDriftDialog {
 
@@ -55,13 +57,30 @@ public final class CompareDialog extends RegDriftDialog {
     private JComboBox<String> arbiterCombo;
     private ToggleSwitch motionLossToggle;
 
+    private EnginePanel enginePanel;
+
     /**
-     * Builds the dialog. No window is created until {@link #showModal()}.
+     * Builds the dialog against this Fiji's engines. No window is created until
+     * {@link #showModal()}.
      *
      * @param choices the recordings this dialog can offer
      */
     public CompareDialog(ImageChoices choices) {
-        super(TITLE, choices);
+        this(choices, null);
+    }
+
+    /**
+     * Builds the dialog against a supplied engine service.
+     *
+     * <p>The seam a test uses to hand the Engines section a known set of
+     * engines instead of whatever this computer happens to have. A null service
+     * means the one that reads this Fiji.
+     *
+     * @param choices the recordings this dialog can offer
+     * @param engines where the Engines section gets its rows, or null
+     */
+    public CompareDialog(ImageChoices choices, AutofixService engines) {
+        super(TITLE, choices, engines);
     }
 
     @Override
@@ -119,7 +138,13 @@ public final class CompareDialog extends RegDriftDialog {
 
     @Override
     protected void addSectionsAfterAnalysis() {
-        EnginesPlaceholder.render(form());
+        enginePanel = new EnginePanel(engines());
+        enginePanel.render(form());
+    }
+
+    /** The Engines section, so a test can read what it drew. */
+    public EnginePanel enginePanel() {
+        return enginePanel;
     }
 
     @Override

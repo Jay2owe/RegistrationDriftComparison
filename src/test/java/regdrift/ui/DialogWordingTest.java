@@ -76,6 +76,23 @@ public class DialogWordingTest {
     /** The single place an ampersand is allowed to appear. */
     private static final String DISPLAY_NAME = "Registration & Drift Comparison";
 
+    /**
+     * The one file where a trailing-underscore engine name is correct.
+     *
+     * <p>Two of these engines are ImageJ 1.x plugins whose entry class ends in
+     * an underscore, and the catalogue looks them up by that name at run time.
+     * There the underscore is part of a class name, not a misspelling of a
+     * product; a probe that dropped it would look for a class that does not
+     * exist. Everywhere else - every label, every message, every comment - the
+     * name a person reads is the one its own authors write, so the ban below
+     * holds over the whole plugin apart from this file.
+     */
+    private static final String CATALOGUE = "EngineRegistry.java";
+
+    /** The class-name forms, wrong everywhere except in the catalogue. */
+    private static final List<String> CLASS_NAME_FORMS =
+            Arrays.asList("TurboReg" + "_", "StackReg" + "_");
+
     @Test
     public void noStringAnybodyReadsUsesAWordTheHouseRulesForbid() throws IOException {
         for (File source : javaFilesUnder(UI_PACKAGE)) {
@@ -98,7 +115,7 @@ public class DialogWordingTest {
                 names.contains("CompareDialog.java")
                         && names.contains("DiagnosticsDialog.java")
                         && names.contains("RegDriftDialog.java")
-                        && names.contains("EnginesPlaceholder.java"));
+                        && names.contains("EnginePanel.java"));
 
         String text = read(found.get(0)).toLowerCase();
         assertTrue("the scan must be able to find a word that is really there",
@@ -108,7 +125,7 @@ public class DialogWordingTest {
     @Test
     public void everyEngineIsSpelledTheWayItsOwnAuthorsSpellIt() throws IOException {
         List<String> misspellings = Arrays.asList(
-                "Stackreg", "StackReg_", "Turboreg", "TurboReg_",
+                "Stackreg", "Turboreg",
                 "Correct 3D Drift", "correct 3d drift", "Fast4dreg", "Fast4DREG",
                 "Linear stack alignment with SIFT", "Linear Stack Alignment With SIFT",
                 "Image stabilizer", "Image Stabiliser");
@@ -121,6 +138,31 @@ public class DialogWordingTest {
                         + " what somebody searches for.", text.contains(wrong));
             }
         }
+    }
+
+    /**
+     * The trailing-underscore forms are class names and belong in the one file
+     * that looks classes up. A label, a message or a comment anywhere else that
+     * carries one is naming a product by its class, which is not what its
+     * authors call it and not what anybody searches for.
+     */
+    @Test
+    public void theClassNameFormsAppearInTheCatalogueAndNowhereElse() throws IOException {
+        boolean seenInCatalogue = false;
+        for (File source : javaFilesUnder(SOURCE_ROOT)) {
+            String text = read(source);
+            for (String form : CLASS_NAME_FORMS) {
+                if (CATALOGUE.equals(source.getName())) {
+                    seenInCatalogue |= text.contains(form);
+                    continue;
+                }
+                assertFalse(source.getName() + " names an engine by its class, '" + form
+                        + "'. See this test's CATALOGUE field for where that form belongs.",
+                        text.contains(form));
+            }
+        }
+        assertTrue("the catalogue is where those class names live, and the scan found none there,"
+                + " so this test is guarding nothing", seenInCatalogue);
     }
 
     /**

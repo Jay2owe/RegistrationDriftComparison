@@ -7,11 +7,18 @@
  * Released under the BSD 3-Clause License. See LICENSE for terms.
  */
 /**
- * This plugin's own catalogue of the registration engines it can install, laid
- * over the shaded {@code autofix-core} chassis.
+ * This plugin's own catalogue of the registration engines it looks for, laid
+ * over shared dependency machinery compiled into this jar.
  *
- * <p>Filled by stage 05. The chassis is shared; the catalogue of what this
- * plugin needs never is. Installation happens only when a user clicks, never
- * to produce a diagnosis and never from a macro option.
+ * <p>The machinery is shared with two sibling plugins and knows nothing about
+ * registration; the catalogue is this plugin's and is never shared, because the
+ * three plugins' lists of what they need do not overlap at all.
+ * {@link regdrift.autofix.EngineId} is the part number both halves of this
+ * plugin quote: this package answers whether an engine is here, and the harness
+ * answers how to drive it.
+ *
+ * <p>Reading which engines are here touches this computer and nothing else. A
+ * file is fetched when a person presses a button in the Engines section, never
+ * to produce a measurement and never from a macro line.
  */
 package regdrift.autofix;

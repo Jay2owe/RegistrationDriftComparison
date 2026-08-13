@@ -17,6 +17,9 @@ import regdrift.RegDriftMacroOptionsParser;
 import regdrift.Slice;
 import regdrift.WindowFrames;
 import regdrift.Windows;
+import regdrift.autofix.EngineFixtures;
+import regdrift.autofix.EngineId;
+import regdrift.autofix.EngineRegistry;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -272,38 +275,43 @@ public class DialogsTest {
     // ----------------------------------------------------------- the engines
 
     /**
-     * The section says this build has not looked. It does not say the engines
-     * are absent, because nothing here has looked for them, and a section that
-     * reports a missing engine that is sitting there would send somebody off to
-     * reinstall software they already have.
+     * The Engines section is the real one now: it reports what was found for
+     * every engine in the catalogue, in the catalogue's order, and it says so
+     * with a fixed set of answers rather than with whatever this computer has.
      */
     @Test
-    public void theEnginesSectionSaysThisBuildHasNotChecked() {
-        String notice = EnginesPlaceholder.NOTICE.toLowerCase();
-        assertTrue(EnginesPlaceholder.NOTICE, notice.contains("later build"));
-        assertTrue(EnginesPlaceholder.NOTICE, notice.contains("has not looked"));
+    public void theEnginesSectionReportsEveryEngineTheCatalogueHolds() {
+        CompareDialog dialog = new CompareDialog(TWO_RECORDINGS,
+                EngineFixtures.serviceWherePresent(EngineId.TURBOREG, EngineId.STACKREG));
 
-        for (String claim : Arrays.asList("not installed", "no engines", "missing",
-                "not found", "not present")) {
-            assertFalse("the placeholder must not report a measurement nobody made: " + claim,
-                    notice.contains(claim));
-            assertFalse(claim, EnginesPlaceholder.NOT_CHECKED.toLowerCase().contains(claim));
-        }
+        assertEquals(Arrays.asList(EngineId.values()), dialog.enginePanel().engines());
+        assertEquals(EngineId.values().length, dialog.enginePanel().statuses().size());
     }
 
     @Test
     public void theEnginesSectionNamesTheEnginesTheWayTheirAuthorsDo() {
-        assertEquals(Arrays.asList("StackReg", "TurboReg", "Correct 3D drift", "Fast4DReg",
-                        "Linear Stack Alignment with SIFT", "Image Stabilizer"),
-                EnginesPlaceholder.CANDIDATE_ENGINES);
+        assertTrue(EngineRegistry.displayNames().toString(),
+                EngineRegistry.displayNames().containsAll(Arrays.asList(
+                        "StackReg", "TurboReg", "Correct 3D drift", "Fast4DReg",
+                        "Linear Stack Alignment with SIFT", "Image Stabilizer")));
     }
 
     @Test
     public void nothingInTheEnginesSectionRunsDuringAMeasurement() {
-        assertTrue(EnginesPlaceholder.NOTHING_RUNS_HERE,
-                EnginesPlaceholder.NOTHING_RUNS_HERE.contains("Nothing in this section runs"));
-        assertTrue(EnginesPlaceholder.NOTHING_RUNS_HERE,
-                EnginesPlaceholder.NOTHING_RUNS_HERE.contains("pressing a button"));
+        assertTrue(EnginePanel.NOTHING_RUNS_HERE,
+                EnginePanel.NOTHING_RUNS_HERE.contains("Nothing in this section runs"));
+        assertTrue(EnginePanel.NOTHING_FETCHED_UNASKED,
+                EnginePanel.NOTHING_FETCHED_UNASKED.contains("button here is pressed"));
+    }
+
+    /**
+     * The dialog without an Engines section never asks which engines are here,
+     * so opening it reads nothing about them at all.
+     */
+    @Test
+    public void theDiagnosticsDialogAsksNothingAboutEngines() {
+        assertFalse(new DiagnosticsDialog(TWO_RECORDINGS).sections()
+                .contains(EnginePanel.HEADING));
     }
 
     // ---------------------------------------------------------- the fixtures
