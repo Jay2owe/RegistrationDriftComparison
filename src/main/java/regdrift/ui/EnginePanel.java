@@ -10,6 +10,8 @@ package regdrift.ui;
 
 import regdrift.autofix.AutofixService;
 import regdrift.autofix.EngineId;
+import regdrift.harness.EngineDescriptor;
+import regdrift.harness.EngineRunner;
 import sc.fiji.autofix.core.DependencyFixResult;
 import sc.fiji.autofix.core.DependencyServiceCore;
 import sc.fiji.autofix.core.DependencySpec;
@@ -52,6 +54,15 @@ import java.util.List;
  * being checked and is filled in from another thread as the answers arrive. A
  * second opening in the same session has the answers already and draws them
  * straight away.
+ *
+ * <h2>The one line that is about this session rather than about this computer</h2>
+ *
+ * <p>Everything above is a fact about the install and is the same tomorrow. One
+ * line is not: an engine that left threads running when a comparison drove it is
+ * driven once and no more until Fiji is restarted, and somebody who is about to
+ * press Compare needs to know that before they wonder why a row is missing.
+ * {@link #driveNoteOf} is that line, and it says nothing at all when there is
+ * nothing to say - which, on every engine measured so far, is the case.
  *
  * <h2>Nothing here runs by itself</h2>
  *
@@ -175,6 +186,40 @@ public final class EnginePanel {
         if (row.getStatus() == null) return "";
         if (row.getStatus().isPresent() || row.getStatus().isChecking()) return "";
         return spec.getNonFixableReason();
+    }
+
+    /**
+     * What a comparison would do about this engine right now, or an empty string
+     * when there is nothing worth saying.
+     *
+     * <p>Two things can put a sentence here. An engine that a comparison has
+     * already driven in this session, and that left threads running when it did,
+     * is not driven again - nothing is stopped and nothing is closed, so
+     * restarting Fiji is what it takes to compare it a second time. And an
+     * engine nobody has yet driven twice anywhere carries the note saying the
+     * question is open rather than answered.
+     *
+     * <p>Written for an engine that is here, and for no other kind. "This engine
+     * is driven once a session" under one that is not installed at all is noise
+     * on a row whose whole message is that there is nothing to drive.
+     */
+    public static String driveNoteOf(DependencyServiceCore.DialogRow row) {
+        return driveNoteOf(row, EngineRunner.forThisSession());
+    }
+
+    /**
+     * The same line, read off a supplied runner.
+     *
+     * <p>The seam exists so that what this says about an engine that leaked can
+     * be asserted without arranging for one to leak inside the test runner's own
+     * session.
+     */
+    static String driveNoteOf(DependencyServiceCore.DialogRow row, EngineRunner runner) {
+        if (row.getStatus() == null || !row.getStatus().isPresent()) return "";
+        EngineId engine = (EngineId) row.getSpec().getId();
+        EngineDescriptor descriptor = EngineDescriptor.forEngine(engine);
+        String session = runner.driveOnceNote(engine);
+        return session.isEmpty() ? descriptor.driveNote() : session;
     }
 
     /** The button captions a row offers, in the order the machinery listed them. */
@@ -334,10 +379,17 @@ public final class EnginePanel {
         void show(DependencyServiceCore.DialogRow row) {
             status.setText(statusOf(row));
             write(detail, detailOf(row));
-            write(reason, reasonOf(row));
+            write(reason, both(reasonOf(row), driveNoteOf(row)));
             action = row.getActions().isEmpty() ? null : row.getActions().get(0);
             button.setText(action == null ? "" : action.getLabel());
             button.setVisible(action != null);
+        }
+
+        /** Two sentences on one line, or whichever of them there is. */
+        private static String both(String first, String second) {
+            if (first.isEmpty()) return second;
+            if (second.isEmpty()) return first;
+            return first + " " + second;
         }
 
         private static void write(JLabel label, String text) {

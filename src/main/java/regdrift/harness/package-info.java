@@ -11,6 +11,8 @@
  * execution on hidden images, and timing on the CPU clock.
  *
  * <p>Filled by stage 11. Third-party class names are looked up as strings and
- * must never be relocated. No {@code System.exit} on any path here, ever.
+ * must never be relocated. Nothing here may end the Java process, on any path,
+ * ever: this code runs inside somebody's live Fiji session, and ending it takes
+ * their unsaved images with it.
  */
 package regdrift.harness;

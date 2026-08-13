@@ -37,30 +37,36 @@ import static org.junit.Assert.assertTrue;
  * name and an imported one as the same entry, so this reads the pool.
  *
  * <p>The same reader shape is already used by {@code regdrift.ApiIsolationTest},
- * which seals this package against windows and the network. It is duplicated here
- * rather than shared because the two tests assert different things and a helper
- * that grew a flag for each of them would be the thing most likely to be quietly
- * loosened.
+ * which seals this package against windows and the network. It is duplicated
+ * there rather than shared because the two tests assert different things and a
+ * helper that grew a flag for each of them would be the thing most likely to be
+ * quietly loosened.
+ *
+ * <p>{@code regdrift.harness.EngineRunnerIsolationTest} does use this one, and
+ * needed nothing added to it: "which classes does this package name" is the same
+ * question whether the answer being checked is a log-ratio criterion or a call
+ * to {@code System.exit}. A second copy for a question already answered would be
+ * a second reader to keep correct.
  */
-final class Bytecode {
+public final class Bytecode {
 
     private Bytecode() {
     }
 
     /** What one class file names. */
-    static final class Pool {
+    public static final class Pool {
 
         /** Every piece of text in the pool: names, descriptors and string constants. */
-        final Set<String> text = new TreeSet<String>();
+        public final Set<String> text = new TreeSet<String>();
 
         /** Every class the pool names, in slash form, e.g. {@code regdrift/diag/Frames$Bin}. */
-        final Set<String> classes = new TreeSet<String>();
+        public final Set<String> classes = new TreeSet<String>();
 
         /** Every member the pool refers to, as {@code owner#name}. */
-        final Set<String> members = new HashSet<String>();
+        public final Set<String> members = new HashSet<String>();
 
         /** True when any name, descriptor or constant holds this fragment. */
-        boolean mentions(String fragment) {
+        public boolean mentions(String fragment) {
             for (String entry : text) {
                 if (entry.contains(fragment)) return true;
             }
@@ -68,7 +74,7 @@ final class Bytecode {
         }
 
         /** The classes it names, in dotted form, which is how a person writes them. */
-        Set<String> dottedClasses() {
+        public Set<String> dottedClasses() {
             Set<String> out = new TreeSet<String>();
             for (String name : classes) {
                 if (name.startsWith("[")) continue;             // an array descriptor, not a class
@@ -79,7 +85,7 @@ final class Bytecode {
     }
 
     /** Every compiled class in a package and the packages below it, sorted. */
-    static List<String> classesIn(String packageName) {
+    public static List<String> classesIn(String packageName) {
         File output = buildOutput();
         File folder = new File(output, packageName.replace('.', '/'));
         List<String> found = new ArrayList<String>();
@@ -102,7 +108,7 @@ final class Bytecode {
     }
 
     /** The folder the plugin's own classes were compiled into. */
-    static File buildOutput() {
+    public static File buildOutput() {
         try {
             File output = new File(Estimator.class.getProtectionDomain()
                     .getCodeSource().getLocation().toURI());
@@ -115,7 +121,7 @@ final class Bytecode {
     }
 
     /** A class and whatever the compiler generated alongside it, but nothing merely similar. */
-    static List<String> classAndNested(String className) {
+    public static List<String> classAndNested(String className) {
         int lastDot = className.lastIndexOf('.');
         String packageName = className.substring(0, lastDot);
         String simpleName = className.substring(lastDot + 1);
@@ -136,7 +142,7 @@ final class Bytecode {
         return found;
     }
 
-    static Pool poolOf(String className) throws IOException {
+    public static Pool poolOf(String className) throws IOException {
         DataInputStream in = new DataInputStream(new ByteArrayInputStream(bytecode(className)));
         try {
             assertEquals("not a class file: " + className, 0xCAFEBABE, in.readInt());

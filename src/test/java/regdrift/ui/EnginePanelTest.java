@@ -8,11 +8,18 @@
  */
 package regdrift.ui;
 
+import ij.ImagePlus;
+import ij.ImageStack;
+import ij.process.ByteProcessor;
+import org.junit.After;
 import org.junit.Test;
 import regdrift.autofix.AutofixService;
 import regdrift.autofix.EngineFixtures;
 import regdrift.autofix.EngineId;
 import regdrift.autofix.EngineRegistry;
+import regdrift.Cancellation;
+import regdrift.harness.EngineDescriptor;
+import regdrift.harness.EngineRunner;
 import sc.fiji.autofix.core.DependencyFixResult;
 import sc.fiji.autofix.core.DependencyServiceCore;
 import sc.fiji.autofix.core.Sizes;
@@ -43,6 +50,19 @@ public class EnginePanelTest {
     private static final EngineId FETCHABLE = EngineId.STACKREG;
     private static final EngineId NOT_FETCHABLE = EngineId.MULTISTACKREG;
     private static final EngineId SHIPS_WITH_FIJI = EngineId.CORRECT_3D_DRIFT;
+
+    /**
+     * The threads the fixture below starts on purpose. This test class releases
+     * them; the plugin never does, because reporting a thread and leaving it
+     * alone is the behavior being described here.
+     */
+    private static final List<Thread> LEFT_RUNNING = new ArrayList<Thread>();
+
+    @After
+    public void releaseTheFixtureThreads() {
+        for (Thread thread : LEFT_RUNNING) thread.interrupt();
+        LEFT_RUNNING.clear();
+    }
 
     // ------------------------------------------------------------- the shape
 
@@ -130,6 +150,54 @@ public class EnginePanelTest {
         assertEquals(Arrays.asList("Verify"), captions);
         assertTrue("an engine that is here needs no sentence about how to get it",
                 EnginePanel.reasonOf(row).isEmpty());
+    }
+
+    // ------------------------------------- what a comparison would do next
+
+    /**
+     * An engine that a comparison drove and that left threads running says so on
+     * its row, before somebody presses Compare and wonders why it is absent from
+     * the table.
+     *
+     * <p>Nothing was stopped and nothing was closed when it happened, which is
+     * why restarting Fiji is the honest answer rather than something the plugin
+     * could do for them.
+     */
+    @Test
+    public void anEngineThatLeftThreadsRunningSaysSoOnItsRow() {
+        EngineRunner runner = leakingRunnerThatHasDriven(FETCHABLE);
+        DependencyServiceCore.DialogRow row =
+                rowFor(FETCHABLE, EngineFixtures.serviceWherePresent(FETCHABLE));
+
+        String note = EnginePanel.driveNoteOf(row, runner);
+
+        assertTrue("the row has to say the engine is not driven again: " + note,
+                note.contains("does not drive it again"));
+        assertTrue("and name what it left running, not just that it left something: " + note,
+                note.contains("a-plugin-that-did-not-tidy-up"));
+        assertTrue("and what to do about it: " + note, note.contains("Restart Fiji"));
+        assertTrue("and name the engine: " + note,
+                note.contains(EngineRegistry.displayName(FETCHABLE)));
+    }
+
+    /** An engine nothing has driven says nothing, rather than reassuring somebody. */
+    @Test
+    public void anEngineNothingHasDrivenSaysNothing() {
+        DependencyServiceCore.DialogRow row =
+                rowFor(FETCHABLE, EngineFixtures.serviceWherePresent(FETCHABLE));
+        assertEquals("every engine measured so far can be driven twice, so there is nothing to"
+                        + " say here and nothing is said", "",
+                EnginePanel.driveNoteOf(row, new EngineRunner(everythingIsHere(), nothingRuns())));
+    }
+
+    /** An engine that is not here says nothing about driving it either. */
+    @Test
+    public void anAbsentEngineIsNotToldHowOftenItCouldBeDriven() {
+        DependencyServiceCore.DialogRow row =
+                rowFor(FETCHABLE, EngineFixtures.serviceWherePresent());
+        assertEquals("a row whose whole message is that there is nothing to drive does not also"
+                        + " discuss how often it could be driven", "",
+                EnginePanel.driveNoteOf(row, leakingRunnerThatHasDriven(FETCHABLE)));
     }
 
     // -------------------------------------------- before anything has looked
@@ -223,6 +291,64 @@ public class EnginePanelTest {
     }
 
     // ---------------------------------------------------------- the fixtures
+
+    /** A runner that has driven one engine and found it left a thread running. */
+    private static EngineRunner leakingRunnerThatHasDriven(EngineId engine) {
+        EngineRunner runner = new EngineRunner(everythingIsHere(), new EngineRunner.Driver() {
+            @Override
+            public void drive(ImagePlus working, EngineDescriptor descriptor, String options) {
+                ImageStack stack = working.getStack();
+                for (int slice = 1; slice <= stack.getSize(); slice++) {
+                    stack.getProcessor(slice).add(7);
+                }
+                Thread left = new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            Thread.sleep(60_000L);
+                        } catch (InterruptedException released) {
+                            Thread.currentThread().interrupt();
+                        }
+                    }
+                }, "a-plugin-that-did-not-tidy-up");
+                left.setDaemon(true);
+                left.start();
+                LEFT_RUNNING.add(left);
+            }
+        });
+        runner.run(EngineDescriptor.forEngine(engine), movie(), Cancellation.never(), 30_000L);
+        assertTrue("the fixture has to have left a thread running, or it asserts nothing",
+                runner.drivenAlready(engine));
+        return runner;
+    }
+
+    private static EngineRunner.Presence everythingIsHere() {
+        return new EngineRunner.Presence() {
+            @Override
+            public boolean installed(EngineId engine) {
+                return true;
+            }
+        };
+    }
+
+    private static EngineRunner.Driver nothingRuns() {
+        return new EngineRunner.Driver() {
+            @Override
+            public void drive(ImagePlus working, EngineDescriptor descriptor, String options) {
+                throw new AssertionError("this runner is only asked what it remembers");
+            }
+        };
+    }
+
+    private static ImagePlus movie() {
+        ImageStack stack = new ImageStack(8, 8);
+        for (int t = 0; t < 3; t++) {
+            byte[] pixels = new byte[8 * 8];
+            for (int i = 0; i < pixels.length; i++) pixels[i] = (byte) ((i + t) % 100);
+            stack.addSlice("t" + (t + 1), new ByteProcessor(8, 8, pixels, null));
+        }
+        return new ImagePlus("fixture", stack);
+    }
 
     private static DependencyServiceCore.DialogRow rowFor(EngineId engine,
                                                           AutofixService service) {

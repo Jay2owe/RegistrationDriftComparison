@@ -122,12 +122,27 @@ public final class EngineRegistry implements SpecCatalogue {
      * its class. The command table is what decides whether the plugin can
      * actually be run, so it is the more truthful answer of the two, and it is
      * the faster one as well.
+     *
+     * <p>Public because the harness drives these engines through the same
+     * strings this catalogue detects them by. One spelling, asked twice: a
+     * command that were wrong here would report an engine as absent on a
+     * computer that has it, and a command that were wrong there would fail to
+     * drive an engine this catalogue had already said was present.
      */
-    static final String CORRECT_3D_DRIFT_COMMAND = "Correct 3D drift";
-    static final String DESCRIPTOR_COMMAND = "Descriptor-based series registration (2d/3d + t)";
-    static final String RVSS_COMMAND = "Register Virtual Stack Slices";
-    static final String SIFT_COMMAND = "Linear Stack Alignment with SIFT";
-    static final String IMAGE_STABILIZER_COMMAND = "Image Stabilizer";
+    public static final String CORRECT_3D_DRIFT_COMMAND = "Correct 3D drift";
+
+    /** The Descriptor-based registration entry, as its own configuration names it. */
+    public static final String DESCRIPTOR_COMMAND =
+            "Descriptor-based series registration (2d/3d + t)";
+
+    /** The Register Virtual Stack Slices entry. */
+    public static final String RVSS_COMMAND = "Register Virtual Stack Slices";
+
+    /** The Linear Stack Alignment with SIFT entry. */
+    public static final String SIFT_COMMAND = "Linear Stack Alignment with SIFT";
+
+    /** The Image Stabilizer entry. */
+    public static final String IMAGE_STABILIZER_COMMAND = "Image Stabilizer";
 
     /** The two folders inside Fiji.app that an engine's files land in. */
     private static final String PLUGINS = "plugins";
