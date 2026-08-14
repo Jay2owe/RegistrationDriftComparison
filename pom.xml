@@ -229,6 +229,36 @@
 				</executions>
 			</plugin>
 
+			<!--
+			  The validation runs are named for what they are rather than for
+			  Surefire's default pattern, so they are named here instead. Without
+			  this they compile, pass by hand, and are silently never run by
+			  `mvn test` - which is the shape of failure the whole stage exists
+			  to avoid.
+
+			  Each of them says by name when it cannot run: the twelve library
+			  recordings are not in this repository, the comparison runs need a
+			  Fiji with engines in it, and two of them hold two whole recordings
+			  at once and need more heap than the SciJava parent's -Xmx512m. On
+			  a machine with none of that they skip with the reason printed, and
+			  the rest of the suite is unaffected.
+			-->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<includes>
+						<include>**/Test*.java</include>
+						<include>**/*Test.java</include>
+						<include>**/*Tests.java</include>
+						<include>**/*TestCase.java</include>
+						<include>**/validation/LibraryValidationRun.java</include>
+						<include>**/validation/T4Rerun.java</include>
+						<include>**/validation/BenchmarkFixture.java</include>
+					</includes>
+				</configuration>
+			</plugin>
+
 			<plugin>
 				<groupId>org.codehaus.mojo</groupId>
 				<artifactId>license-maven-plugin</artifactId>

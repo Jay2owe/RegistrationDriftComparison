@@ -76,7 +76,34 @@ public final class MotionDescriptors {
     /** A step this many times the typical step is a knock however small it is. */
     static final double KNOCK_MULTIPLE = 6.0;
 
-    /** Above this, the excursion is growing with time rather than shaking about a centre. */
+    /**
+     * Above this, the excursion is growing with time rather than shaking about a
+     * centre.
+     *
+     * <p><b>Measured against window length on 2026-08-14, and the answer is that a
+     * twelve-frame window cannot see a walk.</b> Median of twenty-five built
+     * 200-frame trajectories, measured on the trajectories themselves so window
+     * length is the only thing varying:
+     *
+     * <table>
+     *   <caption>{@code wander} by window length</caption>
+     *   <tr><th>trajectory</th><th>K=12</th><th>K=24</th><th>K=48</th>
+     *       <th>K=100</th><th>K=200</th></tr>
+     *   <tr><td>pure random walk</td><td>0.96</td><td>1.25</td><td>1.64</td>
+     *       <td>2.63</td><td>3.41</td></tr>
+     *   <tr><td>pure jitter</td><td>0.66</td><td>0.68</td><td>0.69</td>
+     *       <td>0.70</td><td>0.70</td></tr>
+     * </table>
+     *
+     * <p>A random walk only reaches this threshold at about a hundred frames. With
+     * the shipped {@code W=3, K=12} sampler, {@link MotionLabel.Component#WALK} is
+     * therefore <b>effectively unreachable</b>, and a wandering recording is
+     * labelled {@code JITTER}. That is not a wrong threshold - twelve frames of a
+     * random walk genuinely have not wandered anywhere - and it was not lowered,
+     * because separating 0.96 from 0.66 would be fitting a threshold to two
+     * synthetic traces across a margin of 0.3. It is a stated limit of the sampled
+     * fingerprint. Evidence and the decision: {@code VALIDATION.md}.
+     */
     static final double WANDER_WALK = 2.5;
 
     /** Drift this many times the residual excursion is what makes drift a component. */
@@ -90,8 +117,27 @@ public final class MotionDescriptors {
      * ordered on which side of {@code DRIFT_DOMINANCE} the ratio fell flips
      * between samplings of the same recording; it did not measure how wide a band
      * around that threshold is unsafe. A factor of 1.5 either way is a stated
-     * guess at that width, {@code motion_dominant} reads {@code unclear} inside
-     * it, and the re-run in the validation stage is where it gets measured.
+     * guess at that width, and {@code motion_dominant} reads {@code unclear}
+     * inside it.
+     *
+     * <p><b>Measured on 2026-08-14, and 1.5 is too narrow by every recording in
+     * the library.</b> The drift-to-excursion ratio was taken across five sampler
+     * shapes of each of the twelve recordings. <b>All twelve cross
+     * {@code DRIFT_DOMINANCE} under resampling</b>; the spread runs from 3.1x to
+     * 140x, and the margin each recording would need to hold its own crossing back
+     * as {@code unclear} runs from <b>2.00 to 26.29</b>, median 4.46. The shipped
+     * 1.5 is below the smallest of them.
+     *
+     * <p><b>It was not widened</b>, and that is a decision rather than an
+     * oversight: 26.29 fits the worst of twelve recordings from one instrument,
+     * which is how defect D12 happened, and the median still leaves half the
+     * library uncovered. The measurement says something stronger than any number
+     * would - a windowed sample cannot reproduce which component dominates, on any
+     * of these recordings. Dominance is a reported column and nothing routes on
+     * it; D13 took it out of the label's identity for this reason. v0.2.0 either
+     * widens it against a measurement across instruments or withdraws the column,
+     * the way {@code PERIODIC} and the knock count were withdrawn. Evidence:
+     * {@code VALIDATION.md}.
      */
     static final double DOMINANCE_MARGIN = 1.5;
 

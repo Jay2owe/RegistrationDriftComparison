@@ -106,7 +106,11 @@ public class AutoSaveTest {
         assertEquals("movie_1", RegDriftAutoSave.fileNameFor(image("movie 1.tif")));
         assertEquals("well_A1__t0", RegDriftAutoSave.fileNameFor(image("well[A1]:t0.TIF")));
         assertEquals("untitled", RegDriftAutoSave.fileNameFor(image("....")));
-        assertEquals("untitled", RegDriftAutoSave.fileNameFor(null));
+        // Both overloads, each named. Stage 14 added fileNameFor(String) beside
+        // fileNameFor(ImagePlus), which made a bare null ambiguous and stopped the
+        // test tree compiling; a cast says which absence is being asserted about.
+        assertEquals("untitled", RegDriftAutoSave.fileNameFor((ImagePlus) null));
+        assertEquals("untitled", RegDriftAutoSave.fileNameFor((String) null));
     }
 
     // ----------------------------------------------------------- README.txt
