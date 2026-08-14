@@ -48,6 +48,16 @@ public final class Failure {
         /** The image holds a single frame, so there is no movement to measure. */
         NO_TIME_AXIS,
 
+        /**
+         * A file was opened as a recording and is not one this ImageJ can read.
+         *
+         * <p>Separate from {@link #INVALID_PARAMETERS} because it is a fact about
+         * one file rather than about the request, and a batch has to be able to
+         * tell them apart: the first is one row of two hundred and the run
+         * carries on, the second stops the folder before it starts.
+         */
+        IMAGE_UNREADABLE,
+
         /** There are frames, but too few for the measurement asked for. */
         TOO_FEW_FRAMES,
 

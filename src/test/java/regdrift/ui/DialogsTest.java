@@ -8,10 +8,14 @@
  */
 package regdrift.ui;
 
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 import regdrift.Channel;
 import regdrift.EngineSelection;
 import regdrift.Mode;
+import regdrift.RegDriftBatchParameters;
+import regdrift.RegDriftBatchRunner;
 import regdrift.RegDriftMacroOptions;
 import regdrift.RegDriftMacroOptionsParser;
 import regdrift.Slice;
@@ -21,6 +25,8 @@ import regdrift.autofix.EngineFixtures;
 import regdrift.autofix.EngineId;
 import regdrift.autofix.EngineRegistry;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -32,7 +38,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 /**
- * The two dialogs, built and read without a window being put on the screen.
+ * The three dialogs, built and read without a window being put on the screen.
  *
  * <p>Every control is a Swing panel, and a panel can be built on a machine with
  * no display; a window cannot. The dialogs are written so that the whole content
@@ -40,6 +46,12 @@ import static org.junit.Assert.assertTrue;
  * what lets this test check the sections, the defaults, the wording of the mode
  * control and what every control reads back as - the things a person would
  * otherwise have to open the dialog and look at.
+ *
+ * <p>The third is the one a folder goes through, and it carries two things the
+ * other two do not: a preview of which files a filename pattern is about to
+ * take, and a sentence saying how many recordings will be worked through at
+ * once. Both are asserted below, because both are answers to questions somebody
+ * would otherwise have to run a folder of two hundred recordings to find out.
  *
  * <p>What is left for the hands-on pass: that the window appears, that Cancel
  * closes it, that the disclosure animates the way it should, and that the ImageJ
@@ -51,6 +63,9 @@ public class DialogsTest {
     private static final ImageChoices TWO_RECORDINGS = ImageChoices.of(Arrays.asList(
             new ImageChoices.Entry("movie.tif", 3, 4, 48),
             new ImageChoices.Entry("registered.tif", 3, 4, 48)), "movie.tif");
+
+    @Rule
+    public TemporaryFolder temp = new TemporaryFolder();
 
     // ------------------------------------------------------------- the shape
 
@@ -312,6 +327,145 @@ public class DialogsTest {
     public void theDiagnosticsDialogAsksNothingAboutEngines() {
         assertFalse(new DiagnosticsDialog(TWO_RECORDINGS).sections()
                 .contains(EnginePanel.HEADING));
+    }
+
+    // ------------------------------------------------------ the folder dialog
+
+    @Test
+    public void theFolderDialogShowsThreeSectionsAndCarriesTheDisplayName() {
+        assertEquals(Arrays.asList("Input", "Analysis", "Output"),
+                new BatchDialog().sections());
+        assertTrue(BatchDialog.TITLE, BatchDialog.TITLE.startsWith(
+                "Registration & Drift Comparison"));
+    }
+
+    /**
+     * A folder run offers the four modes a folder can answer and says, where
+     * somebody would look for it, why scoring is not among them.
+     */
+    @Test
+    public void theFolderDialogOffersTheFourModesAFolderCanRunAndSaysWhyNotTheFifth() {
+        assertEquals(Arrays.asList(
+                        RegDriftDialog.LABEL_DIAGNOSE,
+                        RegDriftDialog.LABEL_DIAGNOSE_AND_RECOMMEND,
+                        RegDriftDialog.LABEL_APPLY,
+                        RegDriftDialog.LABEL_COMPARE),
+                new BatchDialog().modeChoices());
+        assertFalse("a folder and one filename pattern cannot say which registered stack goes"
+                        + " with which recording, so scoring is not offered",
+                new BatchDialog().modeChoices().contains(RegDriftDialog.LABEL_SCORE));
+        assertTrue(BatchDialog.WHY_NO_SCORE,
+                BatchDialog.WHY_NO_SCORE.contains("two stacks for every recording"));
+        assertTrue("and points at the menu item that does score a pair: "
+                + BatchDialog.WHY_NO_SCORE, BatchDialog.WHY_NO_SCORE.contains("Compare"));
+    }
+
+    /**
+     * <b>The dialog says how many recordings will be worked through at once, and
+     * why - it is not quietly slower in the two modes that drive engines.</b>
+     *
+     * <p>Measured in {@code BatchModeConcurrencyTest}: two recordings driving
+     * registration engines at the same time set and restore ImageJ's one
+     * batch-mode switch against each other and leave it on. The remedy is one
+     * recording at a time in those two modes, and a remedy nobody is told about
+     * reads as a slow computer - which is exactly how the defect underneath it
+     * would survive.
+     */
+    @Test
+    public void theFolderDialogSaysHowManyRecordingsRunAtOnceAndWhy() {
+        BatchDialog dialog = new BatchDialog();
+        assertTrue("a mode that measures and ranks works through several at once: "
+                + dialog.workerNoteText(), dialog.workerNoteText().contains("at once"));
+
+        dialog.mode(Mode.COMPARE);
+        assertTrue("comparing says it runs one at a time: " + dialog.workerNoteText(),
+                dialog.workerNoteText().contains("one movie at a time"));
+        assertTrue("and why: " + dialog.workerNoteText(),
+                dialog.workerNoteText().contains("batch mode"));
+
+        dialog.mode(Mode.APPLY);
+        assertTrue("and so does applying: " + dialog.workerNoteText(),
+                dialog.workerNoteText().contains("one movie at a time"));
+
+        dialog.mode(Mode.DIAGNOSE);
+        assertTrue("while measuring goes back to several at once: " + dialog.workerNoteText(),
+                dialog.workerNoteText().contains("at once"));
+        assertEquals("and the note is the one the runner itself acts on, not a second copy of it",
+                DialogForm.wrapped(RegDriftBatchRunner.movieWorkerNoteFor(Mode.DIAGNOSE)),
+                dialog.workerNoteText());
+    }
+
+    /**
+     * The preview shows which files a pattern takes and which it leaves alone,
+     * before anything is opened.
+     */
+    @Test
+    public void theFolderDialogPreviewsWhatThePatternTakesAndWhatItLeavesAlone() throws IOException {
+        File folder = temp.newFolder("plate");
+        assertTrue(new File(folder, "A1_t0.tif").createNewFile());
+        assertTrue(new File(folder, "A2_t0.tif").createNewFile());
+        assertTrue(new File(folder, "notes.csv").createNewFile());
+
+        BatchDialog dialog = new BatchDialog();
+        assertEquals("before a folder is chosen it says so rather than showing an empty list",
+                BatchDialog.NOTHING_CHOSEN, dialog.previewText());
+
+        dialog.folder(folder.getAbsolutePath());
+        String said = dialog.previewText();
+        assertTrue("the two recordings are listed: " + said,
+                said.contains("A1_t0.tif") && said.contains("A2_t0.tif"));
+        assertTrue("and so is the file it will leave alone: " + said, said.contains("notes.csv"));
+        assertTrue("named as skipped, so a pattern taking half a folder shows as one: " + said,
+                said.contains("skipped"));
+        assertEquals("and the preview is the reading the run itself uses, not a second one",
+                RegDriftBatchRunner.preview(dialog.parameters()), said);
+
+        dialog.pattern("^(A1)_.*\\.tif$");
+        assertTrue("narrowing the pattern narrows what it takes: " + dialog.previewText(),
+                dialog.previewText().contains("1 recording to run"));
+        assertNull("and the dialog is happy to be accepted", dialog.whatStopsThisRun());
+
+        dialog.pattern("^nothing-here-matches-this$");
+        assertNotNull("a pattern that would run nothing is refused at the button rather than"
+                + " producing an empty table", dialog.whatStopsThisRun());
+        assertTrue(dialog.whatStopsThisRun(),
+                dialog.whatStopsThisRun().contains(RegDriftBatchParameters.DEFAULT_PATTERN));
+    }
+
+    /** A folder run reads back as the settings its controls were left on. */
+    @Test
+    public void theFolderDialogReadsBackAsWhatItsControlsSay() throws IOException {
+        File folder = temp.newFolder("read-back");
+        assertTrue(new File(folder, "B1_t0.tif").createNewFile());
+
+        BatchDialog dialog = new BatchDialog();
+        dialog.folder(folder.getAbsolutePath());
+        dialog.pattern("^([A-Z]\\d+)_.*\\.tif$");
+        dialog.recursive(true);
+        dialog.mode(Mode.COMPARE);
+
+        RegDriftBatchParameters read = dialog.parameters();
+        assertEquals(folder.getAbsolutePath(), read.folder().getAbsolutePath());
+        assertEquals("^([A-Z]\\d+)_.*\\.tif$", read.pattern());
+        assertTrue("sub-folders are read as well", read.recursive());
+        assertEquals(Mode.COMPARE, read.mode());
+        assertEquals("the bracketed part of the pattern is what labels a recording",
+                "B1", read.labelFor("B1_t0.tif"));
+        assertEquals("and a file it does not match is labelled nothing at all rather than being"
+                + " quietly taken", null, read.labelFor("notes.csv"));
+    }
+
+    /** No folder chosen is a sentence, not a run that opens nothing and says nothing. */
+    @Test
+    public void theFolderDialogRefusesAnEmptyFolderByName() {
+        BatchDialog dialog = new BatchDialog();
+        assertNotNull(dialog.whatStopsThisRun());
+        assertTrue(dialog.whatStopsThisRun(),
+                dialog.whatStopsThisRun().contains("No folder was chosen"));
+
+        dialog.folder(new File(temp.getRoot(), "no-such-folder").getAbsolutePath());
+        assertTrue(dialog.whatStopsThisRun(),
+                dialog.whatStopsThisRun().contains("is not a folder this computer can read"));
     }
 
     // ---------------------------------------------------------- the fixtures

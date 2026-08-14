@@ -25,6 +25,7 @@ import javax.swing.JPanel;
 import javax.swing.JRadioButton;
 import javax.swing.JScrollPane;
 import javax.swing.JSeparator;
+import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.SwingConstants;
 import javax.swing.WindowConstants;
@@ -348,6 +349,34 @@ public class DialogForm {
         target.add(row);
         target.add(Box.createVerticalStrut(2));
         return row;
+    }
+
+    /**
+     * A block of fixed-width text that scrolls and cannot be typed into.
+     *
+     * <p>For the one thing on any of these dialogs that is a list rather than a
+     * setting: which files a filename pattern is about to take and which it is
+     * about to leave out. A wrapped {@link #addMessage} would run three hundred
+     * filenames into a paragraph; fixed-width and scrolling keeps the columns
+     * lined up and keeps the dialog the same height whether the folder holds
+     * three recordings or three hundred.
+     *
+     * @param rows how many lines are visible before it scrolls
+     */
+    public JTextArea addTextArea(String text, int rows, int columns) {
+        JTextArea area = new JTextArea(text == null ? "" : text, rows, columns);
+        area.setEditable(false);
+        area.setLineWrap(false);
+        area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 11));
+        area.setForeground(LABEL_COLOR);
+        area.setCaretPosition(0);
+        JScrollPane scroll = new JScrollPane(area);
+        scroll.setAlignmentX(Component.LEFT_ALIGNMENT);
+        scroll.setPreferredSize(new Dimension(360, rows * 16 + 8));
+        scroll.setMaximumSize(new Dimension(Integer.MAX_VALUE, rows * 16 + 8));
+        target.add(scroll);
+        target.add(Box.createVerticalStrut(4));
+        return area;
     }
 
     /** Vertical space. */

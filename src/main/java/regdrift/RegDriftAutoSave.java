@@ -107,6 +107,15 @@ public final class RegDriftAutoSave {
     /** Before-and-after panels. Filled from stage 12. */
     public static final String QC_FOLDER = "qc";
 
+    /**
+     * What a run over a whole folder came to.
+     *
+     * <p><b>Not in {@link #FOLDERS}</b>, on purpose: a single recording makes no
+     * batch folder, and a tree full of empty folders reads as a run that produced
+     * nothing. It is created by {@link #saveBatch} and by nothing else.
+     */
+    public static final String BATCH_FOLDER = "batch";
+
     /** Every folder the tree holds, in the order the README lists them. */
     public static final List<String> FOLDERS = Collections.unmodifiableList(Arrays.asList(
             DIAGNOSIS_FOLDER, RECOMMENDATION_FOLDER, COMPARISON_FOLDER, FRAMES_FOLDER,
@@ -190,7 +199,7 @@ public final class RegDriftAutoSave {
         List<File> written = new ArrayList<File>();
         try {
             makeTree(tree);
-            File summary = summaryTarget(tree);
+            File summary = summaryTarget(tree, SUMMARY_COLUMNS);
             writeReadme(new File(tree, README_FILE), result, summary);
             written.add(new File(tree, README_FILE));
 
@@ -213,11 +222,130 @@ public final class RegDriftAutoSave {
     }
 
     /**
+     * Writes what a run over a whole folder came to.
+     *
+     * <p>Two files, in a {@code batch} folder of their own inside the tree: a
+     * {@code summary.csv} holding one line per recording and one line for the
+     * folder, and a {@code README.txt} saying what those lines are. They sit
+     * apart from the tree's own {@code summary.csv} because the two answer
+     * different questions - that one is a log of every run ever written here, one
+     * line each; this one is one batch, with its recordings kept together and the
+     * folder's own line at the end of them.
+     *
+     * <p>Each recording's tables, stacks and panels were already written by
+     * {@link #save(File, RegDriftResult)} as the batch worked through them, which
+     * is what makes a batch row and a single run's row the same numbers from the
+     * same code.
+     *
+     * @return what was written, or a typed reason it could not be. Never null
+     */
+    public static Report saveBatch(File saveRoot, RegDriftBatchResult batch) {
+        if (batch == null) {
+            throw new IllegalArgumentException("Auto-save needs a batch result to write.");
+        }
+        if (saveRoot == null) {
+            return Report.failed(null, Failure.of(Failure.Kind.INVALID_PARAMETERS,
+                    "Nothing was saved: no folder was given."));
+        }
+        File tree = new File(saveRoot, TREE_FOLDER);
+        File folder = new File(tree, BATCH_FOLDER);
+        Failure tooLong = checkRoomForBatch(saveRoot);
+        if (tooLong != null) return Report.failed(tree, tooLong);
+
+        List<String> columns = batchSummaryColumns();
+        try {
+            makeDirectory(tree);
+            makeDirectory(folder);
+            File summary = summaryTarget(folder, columns);
+            String stamp = RUN_STAMP.format(Instant.now());
+            List<List<String>> lines = new ArrayList<List<String>>();
+            for (List<String> line : batch.summaryLines()) {
+                List<String> stamped = new ArrayList<String>(line.size() + 1);
+                stamped.add(stamp);
+                stamped.addAll(line);
+                lines.add(stamped);
+            }
+            appendSummary(summary, columns, lines);
+            File readme = new File(folder, README_FILE);
+            writeBatchReadme(readme, batch, summary, stamp);
+            return Report.saved(tree, Arrays.asList(readme, summary), summary);
+        } catch (TreeTooCrowded crowded) {
+            return Report.failed(tree, Failure.of(Failure.Kind.SAVE_FAILED, crowded.getMessage()));
+        } catch (IOException problem) {
+            return Report.failed(tree, Failure.of(Failure.Kind.SAVE_FAILED,
+                    "The batch summary could not be written under '" + folder.getAbsolutePath()
+                            + "': " + describe(problem) + " Check the folder exists and can be"
+                            + " written to."));
+        } catch (SecurityException refused) {
+            return Report.failed(tree, Failure.of(Failure.Kind.SAVE_FAILED,
+                    "This computer refused to write under '" + folder.getAbsolutePath() + "': "
+                            + describe(refused) + " Choose a folder you can write to."));
+        }
+    }
+
+    /**
+     * The columns of the batch summary: when the batch ran, then everything a
+     * row of it says.
+     *
+     * <p>The stamp is added here rather than carried in
+     * {@link RegDriftBatchResult}, because it is a fact about the writing rather
+     * than about the measurement, and every line of one batch shares it.
+     */
+    public static List<String> batchSummaryColumns() {
+        List<String> columns = new ArrayList<String>(RegDriftBatchResult.COLUMNS.size() + 1);
+        columns.add("run_utc");
+        columns.addAll(RegDriftBatchResult.COLUMNS);
+        return Collections.unmodifiableList(columns);
+    }
+
+    /**
      * The longest path this system accepts, or {@code 0} when it enforces no
      * limit this plugin has to work around.
      */
     public static int pathLimit() {
         return File.separatorChar == '\\' ? WINDOWS_PATH_LIMIT : 0;
+    }
+
+    /**
+     * Whether a recording with this title has room to be written under this
+     * folder, asked before anything is measured.
+     *
+     * <p>What a batch needs and a single run does not. A single run measures one
+     * recording and then finds out; a batch that found out the same way would
+     * measure two hundred recordings first and discover on the way out that it
+     * could write none of them. So the longest path each recording would need is
+     * built from its title alone - the widest folder name, the widest suffix, and
+     * the longest engine name any registered stack could be filed under - and
+     * measured up front.
+     *
+     * @return a typed reason naming the path and its length, or null when there
+     *         is room
+     */
+    public static Failure checkRoomFor(File saveRoot, String imageTitle) {
+        if (saveRoot == null) return null;
+        File tree = new File(saveRoot, TREE_FOLDER);
+        String stem = fileNameFor(imageTitle);
+        List<File> planned = new ArrayList<File>();
+        planned.add(new File(tree, README_FILE));
+        planned.add(new File(tree, SUMMARY_FILE));
+        for (String folder : FOLDERS) {
+            planned.add(csv(tree, folder, stem, folder));
+        }
+        planned.add(new File(new File(tree, REGISTERED_FOLDER),
+                stem + "_" + safe(RegDriftBatchRunner.longestEngineName()) + ".tif"));
+        planned.add(new File(new File(tree, QC_FOLDER), stem + "_kymograph.tif"));
+        return checkPathLengths(tree, planned);
+    }
+
+    /** Whether the batch's own two files have room under this folder. */
+    public static Failure checkRoomForBatch(File saveRoot) {
+        if (saveRoot == null) return null;
+        File tree = new File(saveRoot, TREE_FOLDER);
+        File batch = new File(tree, BATCH_FOLDER);
+        List<File> planned = new ArrayList<File>();
+        planned.add(new File(batch, README_FILE));
+        planned.add(new File(batch, SUMMARY_FILE));
+        return checkPathLengths(tree, planned);
     }
 
     /**
@@ -229,7 +357,19 @@ public final class RegDriftAutoSave {
      * file rather than one of them having no file at all.
      */
     public static String fileNameFor(ImagePlus image) {
-        String title = image == null || image.getTitle() == null ? "" : image.getTitle().trim();
+        return fileNameFor(image == null ? "" : image.getTitle());
+    }
+
+    /**
+     * The same, from a title on its own.
+     *
+     * <p>The form a batch needs: it knows what a recording will be called before
+     * it has opened it, and has to be able to ask whether that recording's files
+     * would fit in a path this system accepts before it spends an hour measuring
+     * two hundred of them.
+     */
+    public static String fileNameFor(String imageTitle) {
+        String title = imageTitle == null ? "" : imageTitle.trim();
         String stem = title.replaceAll("(?i)\\.(tif|tiff|png|jpg|jpeg|zip|nd2|czi|lif)$", "");
         stem = stem.replaceAll("[^A-Za-z0-9._-]", "_");
         while (stem.startsWith(".")) {
@@ -428,14 +568,14 @@ public final class RegDriftAutoSave {
      * or which does not exist - see the class note for why the older file is left
      * alone rather than reshaped.
      */
-    private static File summaryTarget(File tree) throws IOException {
+    private static File summaryTarget(File folder, List<String> columns) throws IOException {
         for (int n = 1; n <= MAX_SUMMARY_FILES; n++) {
-            File candidate = new File(tree, summaryName(n));
+            File candidate = new File(folder, summaryName(n));
             if (!candidate.isFile() || candidate.length() == 0) return candidate;
             List<String> header = readHeader(candidate);
-            if (header == null || header.equals(SUMMARY_COLUMNS)) return candidate;
+            if (header == null || header.equals(columns)) return candidate;
         }
-        throw new TreeTooCrowded("'" + tree.getAbsolutePath() + "' already holds "
+        throw new TreeTooCrowded("'" + folder.getAbsolutePath() + "' already holds "
                 + MAX_SUMMARY_FILES + " summary files written with different column sets, and no"
                 + " free name is left. Move the old ones somewhere else, or save to a new folder.");
     }
@@ -475,6 +615,19 @@ public final class RegDriftAutoSave {
      * into one row.
      */
     private static void appendSummary(File file, List<String> row) throws IOException {
+        appendSummary(file, SUMMARY_COLUMNS, Collections.singletonList(row));
+    }
+
+    /**
+     * Appends whole lines under a stated header, writing that header first when
+     * the file is new.
+     *
+     * <p>The lines of one batch go in one call so that a folder read by two
+     * batches at once - which nothing here does, but somebody's script might -
+     * cannot end up with one batch's lines threaded through another's.
+     */
+    private static void appendSummary(File file, List<String> columns, List<List<String>> rows)
+            throws IOException {
         boolean fresh = !file.isFile() || file.length() == 0;
         boolean needsBreak = !fresh && !endsWithLineBreak(file);
         BufferedWriter out = Files.newBufferedWriter(file.toPath(), StandardCharsets.UTF_8,
@@ -482,11 +635,13 @@ public final class RegDriftAutoSave {
         try {
             if (needsBreak) out.newLine();
             if (fresh) {
-                out.write(csvLine(SUMMARY_COLUMNS));
+                out.write(csvLine(columns));
                 out.newLine();
             }
-            out.write(csvLine(row));
-            out.newLine();
+            for (List<String> row : rows) {
+                out.write(csvLine(row));
+                out.newLine();
+            }
         } finally {
             out.close();
         }
@@ -723,6 +878,113 @@ public final class RegDriftAutoSave {
             brightFraction = Double.NaN;
         }
         return CeilingAdvice.text(brightFraction);
+    }
+
+    /**
+     * What the {@code batch} folder holds, beside the files it holds.
+     *
+     * <p>The two questions somebody opens this file to answer: which recordings
+     * were run and which were left out, and why the batch worked through them the
+     * way it did. Both are things a table of rows does not say.
+     */
+    private static void writeBatchReadme(File file, RegDriftBatchResult batch, File summary,
+                                         String stamp) throws IOException {
+        RegDriftBatchParameters parameters = batch.parameters();
+        String newline = System.getProperty("line.separator", "\n");
+        StringBuilder text = new StringBuilder();
+
+        line(text, newline, "Registration and Drift Comparison - one run over a folder");
+        line(text, newline, "=========================================================");
+        line(text, newline, "");
+        line(text, newline, "Written by version " + RegDrift.VERSION + " on " + stamp + ".");
+        line(text, newline, "");
+
+        line(text, newline, "WHAT WAS READ");
+        line(text, newline, "  Folder:    " + (parameters.folder() == null
+                ? "" : parameters.folder().getAbsolutePath()));
+        line(text, newline, "  Sub-folders: " + (parameters.recursive()
+                ? "read as well" : "not read"));
+        line(text, newline, "  Pattern:   " + parameters.pattern());
+        line(text, newline, "  Label from capture group: " + parameters.groupCapture()
+                + " (a recording the pattern matches with no such group is labelled '"
+                + RegDriftBatchParameters.UNGROUPED_LABEL + "')");
+        line(text, newline, "  Mode:      " + parameters.mode().macroValue());
+        line(text, newline, "  Recordings run: " + batch.rows().size() + ", of which "
+                + batch.finishedCount() + " produced a measurement and " + batch.failedCount()
+                + " did not");
+        line(text, newline, "  Files skipped:  " + batch.skipped().size()
+                + " (the pattern did not match them)");
+        if (batch.stopped()) {
+            line(text, newline, "  This batch was stopped part way through. Every recording it did");
+            line(text, newline, "  not reach still has a line, saying so.");
+        }
+        line(text, newline, "");
+
+        line(text, newline, "GROUPS");
+        if (batch.groups().isEmpty()) {
+            line(text, newline, "  No recording matched the pattern.");
+        } else {
+            for (Map.Entry<String, List<File>> group : batch.groups().entrySet()) {
+                line(text, newline, "  " + group.getKey() + "  (" + group.getValue().size()
+                        + (group.getValue().size() == 1 ? " recording)" : " recordings)"));
+            }
+        }
+        line(text, newline, "");
+
+        line(text, newline, "HOW THE FOLDER WAS WORKED THROUGH");
+        line(text, newline, "  " + batch.movieWorkers()
+                + (batch.movieWorkers() == 1 ? " recording" : " recordings") + " at a time.");
+        for (String piece : wrap(batch.workerNote())) {
+            line(text, newline, "  " + piece);
+        }
+        line(text, newline, "  The rows below are in the order the folder was read, not the order");
+        line(text, newline, "  the recordings finished, so a run one at a time and a run several");
+        line(text, newline, "  at a time produce the same file.");
+        line(text, newline, "");
+
+        line(text, newline, "THE FILES BESIDE THIS ONE");
+        line(text, newline, "  " + summary.getName());
+        line(text, newline, "      One line per recording, then one line for the folder. That last");
+        line(text, newline, "      line carries '" + RegDriftBatchResult.AGGREGATE_LABEL
+                + "' in the group column: its text columns");
+        line(text, newline, "      hold the value shared by the most recordings and its number");
+        line(text, newline, "      columns hold the middle value, never a total. Columns:");
+        columns(text, newline, batchSummaryColumns());
+        line(text, newline, "  ../" + SUMMARY_FILE);
+        line(text, newline, "      A different file answering a different question: one line per");
+        line(text, newline, "      run ever written into this tree, batch or single recording,");
+        line(text, newline, "      appended as they happen.");
+        line(text, newline, "  ../diagnosis, ../recommendation, ../comparison, ../frames,");
+        line(text, newline, "  ../registered, ../qc");
+        line(text, newline, "      One file per recording in each, named after the recording,");
+        line(text, newline, "      written by the same code a single recording goes through. No");
+        line(text, newline, "      number in the summary beside this file was measured anywhere");
+        line(text, newline, "      else.");
+        line(text, newline, "");
+
+        line(text, newline, "A RECORDING THAT PRODUCED NOTHING");
+        line(text, newline, "  It still has a line. The 'status' column says what kind of thing");
+        line(text, newline, "  went wrong and 'detail' says it in words. One file that is not an");
+        line(text, newline, "  image, or holds a single frame, does not stop the rest of a folder.");
+
+        Files.write(file.toPath(), text.toString().getBytes(StandardCharsets.UTF_8));
+    }
+
+    /** A sentence broken into lines that fit a fixed-width viewer. */
+    private static List<String> wrap(String text) {
+        List<String> lines = new ArrayList<String>();
+        if (text == null || text.trim().isEmpty()) return lines;
+        StringBuilder line = new StringBuilder();
+        for (String word : text.trim().split("\\s+")) {
+            if (line.length() > 0 && line.length() + 1 + word.length() > README_WIDTH) {
+                lines.add(line.toString());
+                line = new StringBuilder();
+            }
+            if (line.length() > 0) line.append(' ');
+            line.append(word);
+        }
+        if (line.length() > 0) lines.add(line.toString());
+        return lines;
     }
 
     private static void line(StringBuilder text, String newline, String content) {
