@@ -162,6 +162,8 @@ public final class Fingerprint {
     private final double brightFraction;
     private final int framesRead;
     private final boolean measurablePlane;
+    private final int[] sampledFrames;
+    private final double[] sampledLog2Mean;
 
     private Fingerprint(Builder b) {
         this.agreementPx = b.agreementPx;
@@ -182,6 +184,8 @@ public final class Fingerprint {
         this.brightFraction = b.brightFraction;
         this.framesRead = b.framesRead;
         this.measurablePlane = b.measurablePlane;
+        this.sampledFrames = b.sampledFrames == null ? new int[0] : b.sampledFrames;
+        this.sampledLog2Mean = b.sampledLog2Mean == null ? new double[0] : b.sampledLog2Mean;
     }
 
     // --------------------------------------------------------- choosing a scale
@@ -390,6 +394,14 @@ public final class Fingerprint {
         }
         double slope = slope(frameIndex, logMean, usable);
         b.log2Trend = Double.isNaN(slope) ? Double.NaN : slope * (b.frameCount - 1);
+        // The points the line was fitted through, kept so that the trend can be drawn rather than
+        // asserted. A single fitted number is not something a reader can disagree with.
+        b.sampledFrames = new int[usable];
+        b.sampledLog2Mean = new double[usable];
+        for (int i = 0; i < usable; i++) {
+            b.sampledFrames[i] = (int) Math.round(frameIndex[i]);
+            b.sampledLog2Mean[i] = logMean[i];
+        }
 
         // The bright share, per frame, then the median across frames. Spread is measured from the
         // DIM half of the frame - the gap between the median and the lower quartile - because a
@@ -488,6 +500,26 @@ public final class Fingerprint {
      */
     public double log2Trend() {
         return log2Trend;
+    }
+
+    /**
+     * Which frames the intensity trend was fitted through, 0-based and ascending.
+     *
+     * <p>Paired with {@link #sampledLog2Mean()}. Kept so that
+     * {@link #log2Trend()} can be drawn as points and a line rather than shown as
+     * one number nobody can check: a trend fitted through eleven frames of a
+     * five-hundred-frame recording is a different claim from one fitted through
+     * all of them, and the plot is where that shows.
+     *
+     * <p>Empty when nothing was measured.
+     */
+    public int[] sampledFrames() {
+        return sampledFrames.clone();
+    }
+
+    /** The log2 mean brightness of each of those frames. See {@link #sampledFrames()}. */
+    public double[] sampledLog2Mean() {
+        return sampledLog2Mean.clone();
     }
 
     /**
@@ -794,5 +826,7 @@ public final class Fingerprint {
         private double brightFraction = Double.NaN;
         private int framesRead;
         private boolean measurablePlane;
+        private int[] sampledFrames;
+        private double[] sampledLog2Mean;
     }
 }

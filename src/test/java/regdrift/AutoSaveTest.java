@@ -274,9 +274,12 @@ public class AutoSaveTest {
      * A run that measured nothing still says so, in its own line.
      *
      * <p>Asked of {@link Mode#APPLY}. It used to be asked of the default mode,
-     * which produced nothing until stage 10 filled the recommending branch in;
-     * the rule being checked is about how a run that could not finish is
-     * recorded, so it moves to whichever mode still cannot finish.
+     * which produced nothing until stage 10 filled the recommending branch in,
+     * and it used to read {@code not_implemented} until stage 13 built the last
+     * two branches. The rule being checked has not moved: a run that could not
+     * finish appends a line saying which kind of reason it gave, so a folder of
+     * results says which runs are missing and why without any of them having to
+     * be opened.
      */
     @Test
     public void aRunThatProducedNothingStillRecordsWhy() throws IOException {
@@ -293,9 +296,17 @@ public class AutoSaveTest {
         File tree = new File(root, RegDriftAutoSave.TREE_FOLDER);
         assertFalse("no diagnosis was made, so no diagnosis file",
                 new File(tree, "diagnosis/movie_diagnosis.csv").exists());
+        assertTrue("but the folders are all there, ready for the run that works",
+                new File(tree, RegDriftAutoSave.REGISTERED_FOLDER).isDirectory()
+                        && new File(tree, RegDriftAutoSave.QC_FOLDER).isDirectory());
+        assertEquals("and nothing was written into them", 0,
+                new File(tree, RegDriftAutoSave.REGISTERED_FOLDER).list().length);
         List<String> line = RegDriftAutoSave.parseCsvLine(
                 lines(new File(tree, RegDriftAutoSave.SUMMARY_FILE)).get(1));
-        assertEquals("not_implemented",
+        assertEquals("the status column carries the typed reason, lower case",
+                result.failure().kind().name().toLowerCase(java.util.Locale.ROOT),
+                line.get(RegDriftAutoSave.SUMMARY_COLUMNS.indexOf("status")));
+        assertEquals("engine_unavailable",
                 line.get(RegDriftAutoSave.SUMMARY_COLUMNS.indexOf("status")));
     }
 

@@ -44,7 +44,10 @@ public final class RegDriftResult {
     private final Verdict verdict;
     private final String verdictReason;
     private final List<Recommendation> ranked;
+    private final List<ArmOutcome> arms;
+    private final List<Trace> traces;
     private final ImagePlus registered;
+    private final ImagePlus qcPanel;
     private final Provenance provenance;
     private final Failure failure;
 
@@ -58,7 +61,10 @@ public final class RegDriftResult {
         this.verdictReason = builder.verdictReason;
         this.ranked = Collections.unmodifiableList(
                 new ArrayList<Recommendation>(builder.ranked));
+        this.arms = Collections.unmodifiableList(new ArrayList<ArmOutcome>(builder.arms));
+        this.traces = Collections.unmodifiableList(new ArrayList<Trace>(builder.traces));
         this.registered = builder.registered;
+        this.qcPanel = builder.qcPanel;
         this.provenance = builder.provenance;
         this.failure = builder.failure;
     }
@@ -125,9 +131,43 @@ public final class RegDriftResult {
         return ranked;
     }
 
+    /**
+     * The arms a comparison produced, first ranked first.
+     *
+     * <p>One per engine the comparison considered, <b>including the ones this
+     * computer does not have</b>: an engine left out of the list would read as one
+     * nobody asked about. Empty when no comparison was made.
+     */
+    public List<ArmOutcome> arms() {
+        return arms;
+    }
+
+    /**
+     * The curves this run measured, as numbers.
+     *
+     * <p>Drawing them is the menu entry's job; this is what it draws from. Empty
+     * when the run measured nothing worth a curve.
+     */
+    public List<Trace> traces() {
+        return traces;
+    }
+
     /** The registered stack. Null unless a mode produced one. */
     public ImagePlus registered() {
         return registered;
+    }
+
+    /**
+     * The before-and-after panel, when an arm produced a stack to draw one from.
+     *
+     * <p>An 8-bit image, one row per frame, the raw half beside the registered
+     * half. Built because it is the check that works as a still - it goes into the
+     * auto-save tree's {@code qc} folder - and not shown: a comparison that opened
+     * a second window per run would be a nuisance. Null when no arm produced a
+     * stack.
+     */
+    public ImagePlus qcPanel() {
+        return qcPanel;
     }
 
     /**
@@ -159,7 +199,10 @@ public final class RegDriftResult {
         private Verdict verdict;
         private String verdictReason = "";
         private List<Recommendation> ranked = new ArrayList<Recommendation>();
+        private List<ArmOutcome> arms = new ArrayList<ArmOutcome>();
+        private List<Trace> traces = new ArrayList<Trace>();
         private ImagePlus registered;
+        private ImagePlus qcPanel;
         private Provenance provenance;
         private Failure failure;
 
@@ -210,9 +253,28 @@ public final class RegDriftResult {
             return this;
         }
 
+        /** The arms a comparison produced, first ranked first. */
+        public Builder arms(List<ArmOutcome> arms) {
+            this.arms = arms == null
+                    ? new ArrayList<ArmOutcome>() : new ArrayList<ArmOutcome>(arms);
+            return this;
+        }
+
+        /** The curves this run measured, for whoever draws them. */
+        public Builder traces(List<Trace> traces) {
+            this.traces = traces == null ? new ArrayList<Trace>() : new ArrayList<Trace>(traces);
+            return this;
+        }
+
         /** The registered stack, when a mode produced one. */
         public Builder registered(ImagePlus registered) {
             this.registered = registered;
+            return this;
+        }
+
+        /** The before-and-after panel, when an arm produced a stack to draw one from. */
+        public Builder qcPanel(ImagePlus qcPanel) {
+            this.qcPanel = qcPanel;
             return this;
         }
 

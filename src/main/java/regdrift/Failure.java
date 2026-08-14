@@ -29,12 +29,19 @@ public final class Failure {
         INVALID_PARAMETERS,
 
         /**
-         * The request is understood and this build does not carry it out yet.
+         * The request is understood and this build does not carry it out.
          *
-         * <p>A branch that has not been written returns this rather than an
-         * empty bundle or a thrown exception, so a dialog can be opened and
-         * clicked, and a macro can be replayed, before the engine underneath it
-         * exists. The message names the build stage the branch arrives in.
+         * <p>A branch that has not been written returns this rather than an empty
+         * bundle or a thrown exception, so a dialog can be opened and clicked, and
+         * a macro can be replayed, before the engine underneath it exists.
+         *
+         * <p><b>Nothing in this build produces it.</b> All five modes are carried
+         * out; the last two arrived in stage 13. It is kept as vocabulary - a
+         * later build that adds a mode has somewhere to put the answer before the
+         * branch behind it exists, which is what let the dialog be built and
+         * clicked four stages before an estimator existed. {@code FacadeTest}
+         * asserts that no mode gives this reason, so it cannot come back
+         * unnoticed.
          */
         NOT_IMPLEMENTED,
 

@@ -9,6 +9,7 @@
 package regdrift;
 
 import ij.ImagePlus;
+import ij.io.FileSaver;
 import ij.measure.ResultsTable;
 import regdrift.advise.CeilingAdvice;
 import sc.fiji.oc3d.core.io.CsvWriter;
@@ -194,6 +195,7 @@ public final class RegDriftAutoSave {
             written.add(new File(tree, README_FILE));
 
             written.addAll(writeTables(tree, title, result));
+            written.addAll(writeImages(tree, title, result));
             appendSummary(summary, summaryRow(result));
             written.add(summary);
             return Report.saved(tree, written, summary);
@@ -238,10 +240,43 @@ public final class RegDriftAutoSave {
 
     // --------------------------------------------------------------- the tree
 
+    /**
+     * The stem a registered stack is filed under: the recording, then the engine
+     * that produced it.
+     *
+     * <p>Named after the engine rather than after the run, so a folder holding
+     * three attempts at one recording says which is which without anything having
+     * to be opened.
+     */
+    public static String registeredNameFor(RegDriftResult result, String title) {
+        for (ArmOutcome arm : result.arms()) {
+            if (arm.rank() == 1) return title + "_" + safe(arm.engineName());
+        }
+        for (ArmOutcome arm : result.arms()) {
+            if (arm.status() == regdrift.harness.ArmStatus.OK) {
+                return title + "_" + safe(arm.engineName());
+            }
+        }
+        return title + "_registered";
+    }
+
+    /** A name a filesystem accepts, from a name an engine's authors chose. */
+    private static String safe(String name) {
+        String stem = name == null ? "" : name.trim().replaceAll("[^A-Za-z0-9._-]", "_");
+        return stem.isEmpty() ? "registered" : stem;
+    }
+
     private static List<File> plannedFiles(File tree, String title, RegDriftResult result) {
         List<File> planned = new ArrayList<File>();
         planned.add(new File(tree, README_FILE));
         planned.add(new File(tree, SUMMARY_FILE));
+        if (result.registered() != null) {
+            planned.add(new File(new File(tree, REGISTERED_FOLDER),
+                    registeredNameFor(result, title) + ".tif"));
+        }
+        if (result.qcPanel() != null) {
+            planned.add(new File(new File(tree, QC_FOLDER), title + "_kymograph.tif"));
+        }
         if (result.diagnosis() != null) {
             planned.add(csv(tree, DIAGNOSIS_FOLDER, title, DIAGNOSIS_FOLDER));
         }
@@ -337,6 +372,50 @@ public final class RegDriftAutoSave {
             out.close();
         }
         return Collections.singletonList(file);
+    }
+
+    /**
+     * The images a run produced: the registered recording, and the
+     * before-and-after panel.
+     *
+     * <p>Written as TIFF, which is what the rest of a microscopy folder is and
+     * what everything downstream reads. <b>Nothing is shown to write it</b> - a
+     * {@code FileSaver} works on a recording in memory, whether or not it ever
+     * had a window - so a run with {@code hide_display} set saves the same files
+     * and opens nothing.
+     *
+     * <p>A recording that will not write is a named failure rather than a folder
+     * with a hole in it: the exception carries the path, and the whole save comes
+     * back as failed.
+     */
+    private static List<File> writeImages(File tree, String title, RegDriftResult result)
+            throws IOException {
+        List<File> written = new ArrayList<File>();
+        ImagePlus registered = result.registered();
+        if (registered != null) {
+            File file = new File(new File(tree, REGISTERED_FOLDER),
+                    registeredNameFor(result, title) + ".tif");
+            writeTiff(registered, file);
+            written.add(file);
+        }
+        ImagePlus panel = result.qcPanel();
+        if (panel != null) {
+            File file = new File(new File(tree, QC_FOLDER), title + "_kymograph.tif");
+            writeTiff(panel, file);
+            written.add(file);
+        }
+        return written;
+    }
+
+    private static void writeTiff(ImagePlus image, File file) throws IOException {
+        FileSaver saver = new FileSaver(image);
+        boolean saved = image.getStackSize() > 1
+                ? saver.saveAsTiffStack(file.getAbsolutePath())
+                : saver.saveAsTiff(file.getAbsolutePath());
+        if (!saved) {
+            throw new IOException("the image '" + image.getTitle() + "' could not be written to '"
+                    + file.getAbsolutePath() + "'.");
+        }
     }
 
     // ------------------------------------------------------------ summary.csv
@@ -533,10 +612,14 @@ public final class RegDriftAutoSave {
         line(text, newline, "      One row per frame of the scored arm. Columns:");
         columns(text, newline, RegDriftTables.FRAMES_COLUMNS);
         line(text, newline, "  " + REGISTERED_FOLDER + "/<title>_<engine>.tif");
-        line(text, newline, "      The registered stack. Written in apply mode; this folder stays");
-        line(text, newline, "      empty in the other modes.");
+        line(text, newline, "      The registered stack, named after the engine that produced it.");
+        line(text, newline, "      Written whenever an engine ran and produced one, which is the");
+        line(text, newline, "      apply and compare modes; this folder stays empty in the others.");
         line(text, newline, "  " + QC_FOLDER + "/<title>_kymograph.tif");
-        line(text, newline, "      A before-and-after panel, when one was asked for.");
+        line(text, newline, "      One row per frame, the recording as it arrived beside the");
+        line(text, newline, "      registered form of it, both stretched between the same two");
+        line(text, newline, "      limits so a flatter registered half reads as stiller rather");
+        line(text, newline, "      than brighter. Written whenever a registered stack was.");
         line(text, newline, "  " + SUMMARY_FILE);
         line(text, newline, "      One line per run, appended across runs. See below.");
         line(text, newline, "");

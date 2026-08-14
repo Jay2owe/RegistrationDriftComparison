@@ -50,18 +50,87 @@ import static org.junit.Assert.fail;
  */
 public class FacadeTest {
 
+    /**
+     * Every mode is built, so no mode names a build stage any more.
+     *
+     * <p>Stage 13 took the last two - {@link Mode#APPLY} and {@link Mode#COMPARE}
+     * - which is why this test no longer has a list of unbuilt modes in it. What
+     * replaced the list is stronger: whatever any mode comes back with, it is
+     * either a measurement or a reason about <em>this recording</em>, and never
+     * "the branch has not been written". A mode reintroduced as unbuilt would
+     * fail here rather than being noticed on somebody's screen.
+     */
     @Test
-    public void everyModeAnswersWithTheStageItArrivesIn() {
-        assertNotImplemented(Mode.APPLY, "13");
-        assertNotImplemented(Mode.COMPARE, "13");
+    public void noModeNamesABuildStageAnyMore() {
         for (Mode mode : Mode.values()) {
-            if (mode == Mode.APPLY || mode == Mode.COMPARE) continue;
             RegDriftResult result = RegDrift.run(requestFor(mode));
+            assertNotNull("mode " + mode.macroValue() + " returned nothing at all", result);
             if (result.failure() == null) continue;
             assertNotEquals("mode " + mode.macroValue() + " has been built, so it must not be"
                             + " naming a build stage any more", Failure.Kind.NOT_IMPLEMENTED,
                     result.failure().kind());
+            assertFalse("mode " + mode.macroValue() + " must not open its reason with the"
+                            + " not-implemented wording either: " + result.failure().message(),
+                    result.failure().message().startsWith("not_implemented"));
+            assertTrue("mode " + mode.macroValue() + " must give a reason a person can read: "
+                            + result.failure().message(),
+                    result.failure().message().endsWith("."));
         }
+    }
+
+    /**
+     * Applying answers about this computer rather than about this build.
+     *
+     * <p>Nothing is installed in a test JVM, so the mode that has to run one
+     * engine comes back saying so and naming what to do about it. That is the
+     * answer it gives on a bare Fiji too, which is the case that matters - and it
+     * is reached after the recording has been measured and the ranking worked
+     * out, so the sentence can name the engine the measurements support.
+     */
+    @Test
+    public void applyAnswersAboutThisComputer() {
+        RegDriftResult result = RegDrift.run(requestFor(Mode.APPLY));
+
+        assertNotNull("apply returned no reason", result.failure());
+        assertEquals(result.failure().message(),
+                Failure.Kind.ENGINE_UNAVAILABLE, result.failure().kind());
+        assertTrue("the reason must name where an engine comes from: "
+                        + result.failure().message(),
+                result.failure().message().contains("Engines section"));
+        assertTrue("and must say that nothing was fetched to produce it - house rule 9: "
+                        + result.failure().message(),
+                result.failure().message().contains("Nothing was fetched"));
+        assertNull("no engine ran, so there is no registered stack", result.registered());
+    }
+
+    /**
+     * A comparison with no engine to compare is a table of rows, not a refusal.
+     *
+     * <p>The third presentation rule of stage 13, run without a person: every
+     * engine the comparison considered gets a row saying what would have to
+     * change for it to run, and none of them is left out. A comparison that came
+     * back with a sentence instead would leave somebody guessing which engines it
+     * had in mind.
+     */
+    @Test
+    public void comparingWithNothingInstalledStillGivesARowPerEngine() {
+        RegDriftResult result = RegDrift.run(requestFor(Mode.COMPARE));
+
+        assertNull(result.failure() == null ? "" : result.failure().message(), result.failure());
+        assertNotNull("a comparison that ran nothing still measured the recording",
+                result.verdict());
+        assertEquals("every engine the catalogue knows about gets a row, present or not",
+                result.ranked().size(), result.arms().size());
+        assertFalse(result.arms().isEmpty());
+        assertNotNull("and the rows reach the table too", result.comparison());
+        assertEquals(result.arms().size(), result.comparison().size());
+        for (ArmOutcome arm : result.arms()) {
+            assertFalse("an engine that was never dispatched carries no rank: " + arm,
+                    arm.isRanked());
+            assertFalse("and says why, rather than leaving an empty cell: " + arm,
+                    arm.detail().isEmpty());
+        }
+        assertNull("nothing ran, so there is no registered stack", result.registered());
     }
 
     /**
@@ -88,7 +157,7 @@ public class FacadeTest {
         assertEquals("a recording with nothing in it cannot be scored, and the reason is typed",
                 Failure.Kind.SCORING_FAILED, result.failure().kind());
         assertFalse("and it is not the not-implemented reason any more",
-                result.failure().message().startsWith(RegDrift.NOT_IMPLEMENTED_PREFIX));
+                result.failure().message().startsWith("not_implemented"));
         assertTrue("the refusal names the defect it is protecting: "
                         + result.failure().message(),
                 result.failure().message().contains("identity warp is not a control"));
@@ -206,14 +275,19 @@ public class FacadeTest {
 
         assertFalse(result.isSuccess());
         assertNotNull(result.failure());
-        assertEquals(Failure.Kind.NOT_IMPLEMENTED, result.failure().kind());
+        assertEquals(Failure.Kind.ENGINE_UNAVAILABLE, result.failure().kind());
         assertTrue("the reason must be a sentence, not a code",
                 result.failure().message().endsWith("."));
-        assertNull("no mode has produced a registered stack yet", result.registered());
-        assertNull("nothing has been measured, so nothing is recorded about it",
+        assertNull("a mode that could not run an engine produced no registered stack",
+                result.registered());
+        assertNull("a run that gave up carries no record, whatever it managed on the way",
                 result.provenance());
         assertEquals("", result.verdictReason());
-        assertTrue(result.ranked().isEmpty());
+        assertTrue("nor a half-filled ranking", result.ranked().isEmpty());
+        assertTrue("nor half-filled arms", result.arms().isEmpty());
+        assertTrue("nor curves nobody can read a verdict beside", result.traces().isEmpty());
+        assertNull(result.comparison());
+        assertNull(result.qcPanel());
     }
 
     // ------------------------------------------------------ refusing an input
@@ -284,39 +358,63 @@ public class FacadeTest {
     }
 
     /**
-     * The version travels with the result rather than being spelled twice.
+     * The version travels with the result, and is written down in one file.
      *
-     * <p>Two carriers, because the default mode measures now: an unbuilt mode
-     * puts the version in the reason it gives, and a mode that finishes puts it
-     * in the record of what it did.
+     * <p>The reason a mode gave used to carry it too, which is how it was checked
+     * before stage 13 built the last two modes and left no mode with a build
+     * stage to name. What replaced that is the stronger check: the literal
+     * appears in exactly one source file, so a release that bumps it cannot leave
+     * a second copy behind saying something else.
      */
     @Test
-    public void theVersionIsSpelledInOnePlace() {
+    public void theVersionIsSpelledInOnePlace() throws java.io.IOException {
         assertFalse(RegDrift.VERSION.trim().isEmpty());
-        assertTrue("the not-implemented reason carries the build it came from",
-                RegDrift.run(requestFor(Mode.APPLY)).failure().message()
-                        .contains(RegDrift.VERSION));
-        assertEquals("and a run that finished records it rather than spelling it again",
+        assertEquals("a run that finished records it rather than spelling it again",
                 RegDrift.VERSION,
                 RegDrift.run(stack(1, 1, 6, "movie.tif")).provenance().pluginVersion());
+        assertEquals("a comparison records it too", RegDrift.VERSION,
+                RegDrift.run(requestFor(Mode.COMPARE)).provenance().pluginVersion());
+
+        java.util.List<String> carrying = new java.util.ArrayList<String>();
+        for (java.io.File source : javaFilesUnder(new java.io.File(projectRoot(),
+                "src/main/java/regdrift"))) {
+            String text = new String(java.nio.file.Files.readAllBytes(source.toPath()),
+                    java.nio.charset.StandardCharsets.UTF_8);
+            if (text.contains("\"" + RegDrift.VERSION + "\"")) carrying.add(source.getName());
+        }
+        assertEquals("the version literal belongs in RegDrift.java and nowhere else, and was"
+                        + " found in " + carrying,
+                java.util.Collections.singletonList("RegDrift.java"), carrying);
+    }
+
+    /** Every {@code .java} file under a folder of the repository. */
+    private static java.util.List<java.io.File> javaFilesUnder(java.io.File folder) {
+        java.util.List<java.io.File> found = new java.util.ArrayList<java.io.File>();
+        java.io.File[] files = folder.listFiles();
+        assertNotNull("this test reads source from " + folder.getAbsolutePath()
+                + ", and it is not there", files);
+        for (java.io.File file : files) {
+            if (file.isDirectory()) {
+                found.addAll(javaFilesUnder(file));
+            } else if (file.getName().endsWith(".java")) {
+                found.add(file);
+            }
+        }
+        return found;
+    }
+
+    /** The repository root, found from where the compiled classes sit. */
+    private static java.io.File projectRoot() {
+        try {
+            java.io.File output = new java.io.File(FacadeTest.class.getProtectionDomain()
+                    .getCodeSource().getLocation().toURI());
+            return output.getParentFile().getParentFile();
+        } catch (java.net.URISyntaxException unreadable) {
+            throw new AssertionError("could not find the source tree: " + unreadable);
+        }
     }
 
     // -------------------------------------------------------------- fixtures
-
-    private static void assertNotImplemented(Mode mode, String stage) {
-        RegDriftResult result = RegDrift.run(requestFor(mode));
-
-        assertNotNull("mode " + mode.macroValue() + " returned nothing", result);
-        assertNotNull("mode " + mode.macroValue() + " returned no reason", result.failure());
-        assertEquals(Failure.Kind.NOT_IMPLEMENTED, result.failure().kind());
-        assertTrue("mode " + mode.macroValue() + " should name build stage " + stage
-                        + ", and said: " + result.failure().message(),
-                result.failure().message().startsWith(
-                        RegDrift.NOT_IMPLEMENTED_PREFIX + stage + "."));
-        assertTrue("the reason should name the mode a user asked for",
-                result.failure().message().contains(mode.macroValue()));
-        assertEquals(mode, result.parameters().mode());
-    }
 
     /** A request in the given mode, with whatever that mode needs to be valid. */
     private static RegDriftParameters requestFor(Mode mode) {

@@ -15,9 +15,12 @@ import ij.WindowManager;
 import ij.measure.ResultsTable;
 import ij.plugin.PlugIn;
 import ij.plugin.frame.Recorder;
+import regdrift.ui.CompareDialog;
 import regdrift.ui.ImageChoices;
+import regdrift.ui.Plots;
 import regdrift.ui.Progress;
 import regdrift.ui.RegDriftDialog;
+import regdrift.ui.ResultsPanel;
 
 import java.awt.GraphicsEnvironment;
 import java.util.ArrayList;
@@ -200,7 +203,8 @@ public abstract class RegDriftEntry implements PlugIn {
         Progress progress = newProgress();
         RegDriftParameters parameters;
         try {
-            parameters = options.toParameters(image, second, progress.cancellation());
+            parameters = options.toParameters(image, second, progress.cancellation(),
+                    dispatchFor(options));
         } catch (IllegalArgumentException unusable) {
             reportFailure(unusable.getMessage(), options.isHideDisplay());
             return;
@@ -283,10 +287,35 @@ public abstract class RegDriftEntry implements PlugIn {
     }
 
     /**
-     * Puts the tables and the registered stack on the screen.
+     * Who answers before a comparison drives anything, and what a run that asks
+     * nobody assumes.
      *
-     * <p>The single method in this plugin that shows a result. A table with no
-     * rows is left alone rather than opened empty.
+     * <p>A person driving from the menu or from a macro they are watching gets
+     * the box; a run that asked for no windows gets an answer of yes, because
+     * there is nobody at the keyboard and a script that asked for a comparison
+     * has already said it. {@code hide_display} therefore suppresses this box the
+     * same way it suppresses every other one.
+     */
+    protected Dispatch dispatchFor(RegDriftMacroOptions options) {
+        if (options.isHideDisplay() || GraphicsEnvironment.isHeadless()) {
+            return Dispatch.always();
+        }
+        return CompareDialog.askBeforeDispatch();
+    }
+
+    /**
+     * Puts the tables, the plots, the registered stack and the results view on
+     * the screen.
+     *
+     * <p>The single method in this plugin that shows a result, which is why it is
+     * here rather than in the facade: {@link RegDrift#run} hands back objects and
+     * a bytecode test holds it to that. A table with no rows is left alone rather
+     * than opened empty.
+     *
+     * <p>The results view goes up last so that it is the window in front. The
+     * before-and-after panel is built but not shown - it is a picture of numbers
+     * the tables already carry, it goes into the saved tree, and a second image
+     * window per run is a nuisance rather than a result.
      */
     protected void display(RegDriftResult result) {
         if (GraphicsEnvironment.isHeadless()) return;
@@ -296,6 +325,8 @@ public abstract class RegDriftEntry implements PlugIn {
         showTable(result.frames(), "Frames");
         ImagePlus registered = result.registered();
         if (registered != null) registered.show();
+        Plots.showDefaults(result.traces());
+        ResultsPanel.show(result);
     }
 
     private static void showTable(ResultsTable table, String title) {

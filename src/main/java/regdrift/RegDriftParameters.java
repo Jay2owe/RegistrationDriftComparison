@@ -46,6 +46,7 @@ public final class RegDriftParameters {
     private final boolean hideDisplay;
     private final boolean serial;
     private final Cancellation cancellation;
+    private final Dispatch dispatch;
 
     private RegDriftParameters(Builder builder) {
         this.image = builder.image;
@@ -65,6 +66,7 @@ public final class RegDriftParameters {
         this.hideDisplay = builder.hideDisplay;
         this.serial = builder.serial;
         this.cancellation = builder.cancellation;
+        this.dispatch = builder.dispatch;
     }
 
     /**
@@ -182,6 +184,21 @@ public final class RegDriftParameters {
         return cancellation;
     }
 
+    /**
+     * Who is asked before a comparison drives anything, and what they answer.
+     *
+     * <p>Never null. A run built without one carries {@link Dispatch#always()},
+     * which is what a script and a batch loop want: they have already said yes
+     * and there is nobody at the keyboard to ask.
+     *
+     * <p>Not a macro option, for the same reason {@link #cancellation()} is not:
+     * it is a person answering a question while a run is in flight, not a value
+     * written down before it starts.
+     */
+    public Dispatch dispatch() {
+        return dispatch;
+    }
+
     /** True when a save root was given. */
     public boolean hasSaveRoot() {
         return !saveRoot.isEmpty();
@@ -217,6 +234,7 @@ public final class RegDriftParameters {
         private boolean hideDisplay = false;
         private boolean serial = false;
         private Cancellation cancellation = Cancellation.never();
+        private Dispatch dispatch = Dispatch.always();
 
         private Builder(ImagePlus image) {
             if (image == null) {
@@ -324,6 +342,17 @@ public final class RegDriftParameters {
          */
         public Builder cancellation(Cancellation cancellation) {
             this.cancellation = cancellation == null ? Cancellation.never() : cancellation;
+            return this;
+        }
+
+        /**
+         * Who answers the question a comparison asks before it drives anything.
+         *
+         * <p>Left alone, the run carries {@link Dispatch#always()} and asks
+         * nobody, which is the right answer for a headless call.
+         */
+        public Builder dispatch(Dispatch dispatch) {
+            this.dispatch = dispatch == null ? Dispatch.always() : dispatch;
             return this;
         }
 

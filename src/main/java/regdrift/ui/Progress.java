@@ -47,6 +47,28 @@ public final class Progress {
     private final StatusBarProgress bar;
     private final Cancellation.Flag stop;
 
+    /**
+     * The switch a run actually reads, which looks at Esc as well as at the flag.
+     *
+     * <p>Nothing else in a run is in a position to notice Esc. The parts that
+     * take time - frame pairs, pyramid levels, the gap between two engine arms -
+     * read the switch, so the switch is where the keyboard has to be looked at.
+     * Reading it is a read of one boolean field, which costs nothing at the rate
+     * a worker asks, and a comparison that runs for ten minutes with no way to
+     * stop it is a frozen Fiji.
+     */
+    private final Cancellation watching = new Cancellation() {
+        @Override
+        public boolean canceled() {
+            return stop.canceled() || checkEscape();
+        }
+
+        @Override
+        public String toString() {
+            return stop.toString();
+        }
+    };
+
     private Progress(StatusBarProgress bar) {
         this.bar = bar;
         this.stop = Cancellation.flag();
@@ -89,9 +111,15 @@ public final class Progress {
         bar.error(pluginName, description);
     }
 
-    /** The switch a run reads to find out whether it has been asked to stop. */
+    /**
+     * The switch a run reads to find out whether it has been asked to stop.
+     *
+     * <p>Pulled by a Cancel button, by {@link #cancel()}, and by Esc - see
+     * {@link #checkEscape()}. Once pulled it stays pulled, so a run cannot look
+     * twice and get two answers.
+     */
     public Cancellation cancellation() {
-        return stop;
+        return watching;
     }
 
     /** Asks the run to stop. What a Cancel button calls. */
@@ -107,9 +135,10 @@ public final class Progress {
     /**
      * Looks at whether Esc has been pressed and pulls the switch if it has.
      *
-     * <p>Called from the coordinator between units of work. Reading ImageJ's
-     * keyboard state is a touch of ImageJ state, so it happens here and not in a
-     * worker; what the worker sees is the switch this sets.
+     * <p>What a worker sees is the switch this sets. The read itself is one
+     * static boolean field of {@code ij.IJ} - not a window, not a component, and
+     * nothing that has to be on the window's thread - which is what makes it safe
+     * for {@link #cancellation()} to look at it from wherever a run happens to be.
      *
      * @return true when the run has been asked to stop, whether by Esc or by a
      *         Cancel button

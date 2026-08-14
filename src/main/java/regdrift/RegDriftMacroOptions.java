@@ -334,9 +334,31 @@ public final class RegDriftMacroOptions {
      */
     public RegDriftParameters toParameters(ImagePlus image, ImagePlus compareWithImage,
                                            Cancellation cancellation) {
+        return toParameters(image, compareWithImage, cancellation, Dispatch.always());
+    }
+
+    /**
+     * Turns these settings into a run that somebody can stop, and that asks
+     * before it drives anything.
+     *
+     * <p>Both seams travel together because both are the same kind of thing: a
+     * person at the keyboard, reachable while a run is in flight, and absent when
+     * a script is driving. Neither is one of the fifteen option names.
+     *
+     * @param image            the recording to measure
+     * @param compareWithImage the second stack, resolved from
+     *                         {@link #getCompareWith()} by the caller, or null
+     * @param cancellation     the switch that stops the run, or null for one
+     *                         nobody can pull
+     * @param dispatch         who answers before a comparison drives anything, or
+     *                         null for an answer of yes
+     */
+    public RegDriftParameters toParameters(ImagePlus image, ImagePlus compareWithImage,
+                                           Cancellation cancellation, Dispatch dispatch) {
         validate();
         return RegDriftParameters.builder(image)
                 .cancellation(cancellation)
+                .dispatch(dispatch)
                 .mode(mode)
                 .channel(channel)
                 .slice(slice)

@@ -9,14 +9,19 @@
 package regdrift.ui;
 
 import regdrift.Arbiter;
+import regdrift.Dispatch;
+import regdrift.DispatchEstimate;
 import regdrift.Mode;
+import regdrift.RegDriftEntry;
 import regdrift.RegDriftMacroOptions;
 import regdrift.autofix.AutofixService;
 import sc.fiji.oc3d.core.ui.ToggleSwitch;
 
 import javax.swing.JComboBox;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
+import java.awt.GraphicsEnvironment;
 
 /**
  * The dialog behind {@code Plugins > Registration > Compare Registration
@@ -47,6 +52,16 @@ public final class CompareDialog extends RegDriftDialog {
 
     /** The second-recording dropdown's entry for "nothing chosen yet". */
     public static final String NO_SECOND_RECORDING = "(choose the registered stack)";
+
+    /** The heading of the box that says what a comparison is about to cost. */
+    public static final String DISPATCH_TITLE = RegDriftEntry.DISPLAY_NAME
+            + " - Before this starts";
+
+    /** What the button that goes ahead says. */
+    public static final String DISPATCH_GO = "Run it";
+
+    /** What the button that does not says. */
+    public static final String DISPATCH_STOP = "Cancel";
 
     private JPanel applyGroup;
     private JTextField applyEngineField;
@@ -145,6 +160,37 @@ public final class CompareDialog extends RegDriftDialog {
     /** The Engines section, so a test can read what it drew. */
     public EnginePanel enginePanel() {
         return enginePanel;
+    }
+
+    /**
+     * The answer a person gives before a comparison drives anything.
+     *
+     * <p>Running every engine over a whole recording is minutes to tens of
+     * minutes on a five-hundred-frame stack, and starting that without saying so
+     * is how a plugin gets a reputation for freezing Fiji. So the run works out
+     * what it expects to cost, hands the sentence here, and this puts it in a box
+     * with two buttons.
+     *
+     * <p><b>Cancel at this box runs nothing at all</b>: no engine is dispatched,
+     * no window is opened and nothing is written. What comes back from the run is
+     * a stopped reason, the same as pressing Esc would give.
+     *
+     * <p>On a machine with no display there is nobody to ask, so the answer is
+     * yes - a headless caller that asked for a comparison has already said it.
+     */
+    public static Dispatch askBeforeDispatch() {
+        return new Dispatch() {
+            @Override
+            public boolean proceed(DispatchEstimate estimate) {
+                if (GraphicsEnvironment.isHeadless() || estimate == null) return true;
+                Object[] buttons = {DISPATCH_GO, DISPATCH_STOP};
+                int answer = JOptionPane.showOptionDialog(null,
+                        DialogForm.wrapped(estimate.text()), DISPATCH_TITLE,
+                        JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE, null,
+                        buttons, DISPATCH_GO);
+                return answer == JOptionPane.OK_OPTION;
+            }
+        };
     }
 
     @Override

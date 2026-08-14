@@ -176,17 +176,18 @@ public class EntryRoutingTest {
     }
 
     /**
-     * A mode this build does not carry out yet still says so exactly once, with
-     * no window, when a macro asked for no windows.
+     * A run that cannot do what it was asked says so exactly once, with no
+     * window, when a macro asked for no windows.
      *
-     * <p>The half of the gate item above that outlived the two measuring
-     * branches being filled in: the rule is that a reason is given once, not
-     * twice, and it needs a mode that still has a reason to give. Stage 09 moved
-     * this off {@code diagnose} and stage 10 moved it off
-     * {@code diagnose_recommend}; {@code apply} is where it sits until stage 13.
+     * <p>The rule is that a reason is given once and not twice, and it needs a
+     * mode with a reason to give. Stage 09 moved this off {@code diagnose},
+     * stage 10 off {@code diagnose_recommend}, and stage 13 built the last two
+     * modes - so what it now rests on is not an unbuilt branch but a real answer
+     * about this computer: {@code apply} has to run one engine, a test JVM has
+     * none, and the sentence names what installing one would take.
      */
     @Test
-    public void aHiddenMacroRunOnAnUnbuiltModeSaysItsOneThingOnce() throws Exception {
+    public void aHiddenMacroRunThatCannotRunAnEngineSaysItsOneThingOnce() throws Exception {
         Probe probe = probeFor(new CompareRegistration_());
         probe.open("movie.tif", stack(1, 1, 8));
 
@@ -195,12 +196,58 @@ public class EntryRoutingTest {
         assertEquals("nothing may be shown when the settings asked for no windows",
                 0, probe.loud.size());
         assertEquals("and the reason is given once, not twice", 1, probe.quiet.size());
-        assertTrue(probe.quiet.get(0), probe.quiet.get(0).contains("not carried out by this build"));
+        assertTrue(probe.quiet.get(0),
+                probe.quiet.get(0).contains("No registration engine this plugin can drive"));
+        assertTrue("the reason names what installing one would take: " + probe.quiet.get(0),
+                probe.quiet.get(0).contains("Engines section"));
+        assertTrue("and says nothing was fetched to produce it - house rule 9: "
+                        + probe.quiet.get(0),
+                probe.quiet.get(0).contains("Nothing was fetched"));
         assertEquals(0, probe.shown.size());
         assertEquals(0, probe.recorded.size());
 
         RegDriftResult result = probe.finished.get(0);
-        assertEquals(Failure.Kind.NOT_IMPLEMENTED, result.failure().kind());
+        assertEquals(Failure.Kind.ENGINE_UNAVAILABLE, result.failure().kind());
+        assertEquals("and nothing was registered", null, result.registered());
+    }
+
+    /**
+     * A hidden comparison run drives nothing, shows nothing, and still comes back
+     * with a row for every engine.
+     *
+     * <p>Gate item 5 of stage 13 for the mode most likely to open something: no
+     * window, no plot, no shown table, and a result object filled all the way in.
+     * The third presentation rule is checked at the same time - the engines this
+     * computer does not have are rows, not omissions.
+     */
+    @Test
+    public void aHiddenComparisonShowsNothingAndStillRowsEveryEngine() throws Exception {
+        Probe probe = probeFor(new CompareRegistration_());
+        probe.open("movie.tif", stack(1, 1, 8));
+
+        asMacro("mode=compare hide_display", probe, "");
+
+        assertEquals("nothing may be shown when the settings asked for no windows",
+                0, probe.loud.size());
+        assertEquals("a run that measured something reports no failure at all",
+                0, probe.quiet.size());
+        assertEquals(0, probe.shown.size());
+        assertEquals(0, probe.recorded.size());
+
+        RegDriftResult result = probe.finished.get(0);
+        assertTrue(result.failure() == null ? "" : result.failure().message(),
+                result.isSuccess());
+        assertEquals("every engine the catalogue knows about gets a row",
+                EngineId.values().length, result.arms().size());
+        assertNotNull("and the rows reach the table", result.comparison());
+        assertEquals(EngineId.values().length, result.comparison().size());
+        assertNotNull("the result object is filled in even with no window",
+                result.diagnosis());
+        assertNotNull(result.recommendation());
+        assertNotNull(result.verdict());
+        assertNotNull(result.provenance());
+        assertTrue("and the record says what the figures beside it were measured on - defect D10",
+                result.provenance().calibrationSet().contains("three IncuCyte phase-contrast"));
     }
 
     @Test

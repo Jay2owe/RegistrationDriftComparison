@@ -402,6 +402,19 @@ public final class ControlWarp {
         return new Margin(top, bottom, left, right);
     }
 
+    /**
+     * A margin somebody else worked out.
+     *
+     * <p>The one way to build a {@link Margin} from outside this class, and it
+     * exists for {@link Arbiter#sharedMargin}: a comparison needs a single margin
+     * covering every arm, which is the widest edge of several margins rather than
+     * the margin of any one transform set.
+     */
+    public static Margin marginOf(int top, int bottom, int left, int right) {
+        return new Margin(Math.max(0, top), Math.max(0, bottom),
+                Math.max(0, left), Math.max(0, right));
+    }
+
     /** Rows and columns that are real in every registered frame. */
     public static final class Margin {
 
@@ -441,6 +454,34 @@ public final class ControlWarp {
         /** True when nothing had to be cropped away. */
         public boolean isEmpty() {
             return top == 0 && bottom == 0 && left == 0 && right == 0;
+        }
+
+        /**
+         * The same margin with a few more pixels taken off every side, never
+         * cropping away more than half the frame.
+         *
+         * <p>What a comparison uses. The margin a recording's own movement
+         * produces is exact for that movement; an engine's own transforms differ
+         * from it by its error and by the last digit of the measurement that
+         * recovered them, and a strip an engine filled in is perfectly still,
+         * which reads as a flawless registration. So a comparison stands back a
+         * little from the edge it computed and measures every arm inside that.
+         *
+         * @param pixels how much to stand back by, on each side
+         */
+        public Margin grownBy(int pixels, int width, int height) {
+            int by = Math.max(0, pixels);
+            return new Margin(
+                    Math.min(top + by, Math.max(0, height / 2 - 1)),
+                    Math.min(bottom + by, Math.max(0, height / 2 - 1)),
+                    Math.min(left + by, Math.max(0, width / 2 - 1)),
+                    Math.min(right + by, Math.max(0, width / 2 - 1)));
+        }
+
+        /** True when every side of this margin is inside {@code other}. */
+        public boolean fitsInside(Margin other) {
+            return other != null && top <= other.top && bottom <= other.bottom
+                    && left <= other.left && right <= other.right;
         }
 
         public int croppedWidth(int width) {

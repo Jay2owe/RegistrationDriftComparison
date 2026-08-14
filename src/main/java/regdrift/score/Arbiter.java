@@ -254,6 +254,51 @@ public final class Arbiter {
     public static Scoring score(FrameSource raw, FrameSource registered, Transform[] cumulative,
                                 ControlWarp.Interpolation interpolation, int workers,
                                 PairScheduler.Progress progress, Cancellation cancellation) {
+        return score(raw, registered, cumulative, cumulative, null, interpolation, workers,
+                progress, cancellation);
+    }
+
+    /**
+     * Score a registered recording against a control built from somebody else's
+     * transforms, over a region somebody else chose.
+     *
+     * <p><b>This is what makes a comparison like-for-like</b>, and the reason it
+     * exists is worth stating rather than leaving to be worked out from the
+     * arguments. The form above builds each arm's control out of that arm's own
+     * transforms, which is right when one arm is being rated on its own. It is
+     * wrong when several arms are being compared: an arm that happened to resample
+     * by larger fractions gets a blurrier control, and a blurrier control is an
+     * easier thing to beat. Two arms scored that way are not scored against the
+     * same thing, and the difference between their figures is partly a difference
+     * between their controls.
+     *
+     * <p>So a comparison measures the recording's own movement once, before any
+     * engine is dispatched - {@link #ownMotion} - and hands the same transforms
+     * here as {@code controlTransforms} for every arm. Every arm is then measured
+     * against the identical control stack, resampled identically, over the
+     * identical pixels.
+     *
+     * <p>The margin is separate for the same reason. An arm that moved further
+     * than the control's transforms did leaves fill inside a margin derived from
+     * the control alone, and fill is perfectly still, which reads as a flawless
+     * registration. A comparison therefore works out one margin covering every arm
+     * - {@link #sharedMargin} - and passes it to all of them.
+     *
+     * @param armTransforms     what this arm did: the source of {@code path_px},
+     *                          {@code net_px}, the per-frame status and the
+     *                          motion-preservation flag
+     * @param controlTransforms whose fractional parts the control is built from.
+     *                          Pass the same array as {@code armTransforms} to
+     *                          rate one arm on its own
+     * @param margin            the region measured, or {@code null} to derive one
+     *                          covering both transform sets
+     * @see #score(FrameSource, FrameSource, Transform[], ControlWarp.Interpolation,
+     *      int, PairScheduler.Progress, Cancellation)
+     */
+    public static Scoring score(FrameSource raw, FrameSource registered, Transform[] cumulative,
+                                Transform[] controlTransforms, ControlWarp.Margin fixedMargin,
+                                ControlWarp.Interpolation interpolation, int workers,
+                                PairScheduler.Progress progress, Cancellation cancellation) {
         if (raw == null || registered == null) {
             throw new IllegalArgumentException("scoring needs the recording before and after");
         }
@@ -279,11 +324,18 @@ public final class Arbiter {
         }
         final ControlWarp.Interpolation resampling =
                 interpolation == null ? ControlWarp.Interpolation.BILINEAR : interpolation;
+        final Transform[] controlSource =
+                controlTransforms == null ? cumulative : controlTransforms;
+        if (controlSource.length != n) {
+            throw new IllegalArgumentException("a control needs one transform per frame: " + n
+                    + " were expected and " + controlSource.length + " were given");
+        }
+        final boolean sharedControl = controlSource != cumulative;
 
-        final Transform[] control = ControlWarp.fractionalOf(cumulative);
+        final Transform[] control = ControlWarp.fractionalOf(controlSource);
         ControlWarp.requireAnInterpolatingControl(control, resampling);
-        final ControlWarp.Margin margin = ControlWarp.validMargin(cumulative, width, height,
-                resampling);
+        final ControlWarp.Margin margin = fixedMargin != null ? fixedMargin
+                : sharedMargin(width, height, resampling, cumulative, controlSource);
         final int croppedWidth = margin.croppedWidth(width);
         final int croppedHeight = margin.croppedHeight(height);
         final int pixels = croppedWidth * croppedHeight;
@@ -376,7 +428,42 @@ public final class Arbiter {
         return new Scoring(n, width, height, cumulative, control, resampling, margin,
                 residualBefore, residualAfter, meanSdRegistered, meanSdControl, validFraction,
                 MotionPreservation.of(pathPx(cumulative), width, height,
-                        MotionPreservation.dominance(firstRaw, width, height)));
+                        MotionPreservation.dominance(firstRaw, width, height)), sharedControl);
+    }
+
+    /**
+     * One margin that covers every transform set handed in.
+     *
+     * <p>The region real in every frame of every arm. Each arm's own margin is
+     * worked out and the widest edge of each side is kept, so no arm is measured
+     * over a strip another arm filled in - and, just as importantly, every arm is
+     * measured over the <em>same</em> pixels, which is what lets two figures be
+     * subtracted from each other at all.
+     *
+     * @param sets one transform set per arm, plus the control's. A {@code null}
+     *             entry is skipped
+     */
+    public static ControlWarp.Margin sharedMargin(int width, int height,
+                                                  ControlWarp.Interpolation interpolation,
+                                                  Transform[]... sets) {
+        int top = 0;
+        int bottom = 0;
+        int left = 0;
+        int right = 0;
+        for (int i = 0; sets != null && i < sets.length; i++) {
+            if (sets[i] == null) continue;
+            ControlWarp.Margin one = ControlWarp.validMargin(sets[i], width, height, interpolation);
+            top = Math.max(top, one.top());
+            bottom = Math.max(bottom, one.bottom());
+            left = Math.max(left, one.left());
+            right = Math.max(right, one.right());
+        }
+        // Never crop away the whole frame, whatever an arm did with it.
+        top = Math.min(top, Math.max(0, height / 2 - 1));
+        bottom = Math.min(bottom, Math.max(0, height / 2 - 1));
+        left = Math.min(left, Math.max(0, width / 2 - 1));
+        right = Math.min(right, Math.max(0, width / 2 - 1));
+        return ControlWarp.marginOf(top, bottom, left, right);
     }
 
     /**
@@ -536,7 +623,7 @@ public final class Arbiter {
     }
 
     /** Total distance the registration walked over the recording, in pixels. */
-    static double pathPx(Transform[] cumulative) {
+    public static double pathPx(Transform[] cumulative) {
         double total = 0;
         for (int t = 1; t < cumulative.length; t++) {
             Transform a = cumulative[t - 1] == null ? Transform.IDENTITY : cumulative[t - 1];
@@ -547,7 +634,7 @@ public final class Arbiter {
     }
 
     /** Straight-line distance from the first frame's transform to the last, in pixels. */
-    static double netPx(Transform[] cumulative) {
+    public static double netPx(Transform[] cumulative) {
         if (cumulative.length == 0) return 0;
         Transform a = cumulative[0] == null ? Transform.IDENTITY : cumulative[0];
         Transform b = cumulative[cumulative.length - 1] == null
@@ -677,6 +764,92 @@ public final class Arbiter {
         return new Recovered(cumulative, statuses, maxShift, scale);
     }
 
+    /**
+     * What the recording itself did, measured before anything registered it.
+     *
+     * <p>The consecutive chain: frame 1 against frame 0, frame 2 against frame 1,
+     * and so on, accumulated, so entry {@code t} is where the content of frame 0
+     * has got to by frame {@code t}. A plain chain and nothing else - no
+     * multi-lag reconciliation, which is defect D5 and would erase the very
+     * distinction the fingerprint exists to measure.
+     *
+     * <p><b>Why a comparison needs this.</b> It is the source of the one control
+     * every arm is scored against. Building the control out of one arm's
+     * transforms instead would mean that arm's failure, or its absence from this
+     * computer, changed every other arm's number; and two computers with
+     * different engines installed would produce figures that cannot be put beside
+     * each other. This is measured from the recording alone, so it is the same on
+     * both.
+     *
+     * <p><b>At the source's own scale, which a caller makes native.</b> The
+     * fractional part of a shift measured on binned pixels is not the fraction an
+     * engine resampled with, so a comparison hands in frames at native resolution
+     * - defect D12, the same reason {@link #recover} says so.
+     *
+     * @param raw     the recording as it arrived
+     * @param workers 0 or less to decide automatically, 1 to force serial
+     * @throws java.util.concurrent.CancellationException if the run was stopped
+     *         part-way
+     */
+    public static Recovered ownMotion(FrameSource raw, int workers,
+                                      PairScheduler.Progress progress,
+                                      Cancellation cancellation) {
+        if (raw == null) {
+            throw new IllegalArgumentException("measuring a recording's own movement needs the"
+                    + " recording");
+        }
+        final int n = raw.count();
+        final int width = raw.width();
+        final int height = raw.height();
+        if (n < 2) {
+            throw new IllegalArgumentException("a recording's own movement is measured between"
+                    + " frames, and this one holds " + n);
+        }
+        final Frames.Bin scale = raw.bin();
+        final double maxShift = Math.max(8.0, 0.25 * Math.min(width, height));
+        final PhaseCorrelation estimator = new PhaseCorrelation();
+        final Transform[] cumulative = new Transform[n];
+        final Estimator.Status[] statuses = new Estimator.Status[n];
+        cumulative[0] = Transform.IDENTITY;
+        statuses[0] = Estimator.Status.OK;
+
+        int used = PairScheduler.workersFor(n - 1, workers, 24L * width * height, 0);
+        int batch = Math.max(1, used);
+        double dx = 0;
+        double dy = 0;
+        for (int base = 1; base < n; base += batch) {
+            if (cancellation.canceled()) throw canceled();
+            final int count = Math.min(batch, n - base);
+            final int start = base;
+            final float[][] before = new float[count][];
+            final float[][] after = new float[count][];
+            for (int k = 0; k < count; k++) {
+                before[k] = raw.plane(start + k - 1);
+                after[k] = raw.plane(start + k);
+            }
+            List<Estimator.Displacement> found = PairScheduler.map(count, used,
+                    new PairScheduler.Task<Estimator.Displacement>() {
+                        @Override
+                        public Estimator.Displacement run(int index) {
+                            return estimator.shift(before[index], after[index], width, height,
+                                    maxShift, scale);
+                        }
+                    }, offsetBy(progress, start, n), cancellation);
+            // Accumulated on the coordinator in frame order, never as workers report in: a chain
+            // folded in completion order would put a different last digit on every run.
+            for (int index = 0; index < count; index++) {
+                Estimator.Displacement d = found.get(index);
+                if (d.defined()) {
+                    dx += d.dx();
+                    dy += d.dy();
+                }
+                cumulative[start + index] = Transform.translation(dx, dy);
+                statuses[start + index] = d.status();
+            }
+        }
+        return new Recovered(cumulative, statuses, maxShift, scale, true);
+    }
+
     /** The transforms a registration applied, worked out from its own output. */
     public static final class Recovered {
 
@@ -684,13 +857,30 @@ public final class Arbiter {
         private final Estimator.Status[] statuses;
         private final double maxShift;
         private final Frames.Bin measuredAt;
+        private final boolean fromTheRecordingAlone;
 
         Recovered(Transform[] cumulative, Estimator.Status[] statuses, double maxShift,
                   Frames.Bin measuredAt) {
+            this(cumulative, statuses, maxShift, measuredAt, false);
+        }
+
+        Recovered(Transform[] cumulative, Estimator.Status[] statuses, double maxShift,
+                  Frames.Bin measuredAt, boolean fromTheRecordingAlone) {
             this.cumulative = cumulative;
             this.statuses = statuses;
             this.maxShift = maxShift;
             this.measuredAt = measuredAt;
+            this.fromTheRecordingAlone = fromTheRecordingAlone;
+        }
+
+        /** Total distance this chain walks over the recording, in pixels. */
+        public double pathPx() {
+            return Arbiter.pathPx(cumulative);
+        }
+
+        /** Straight-line distance from the first frame to the last, in pixels. */
+        public double netPx() {
+            return Arbiter.netPx(cumulative);
         }
 
         /** One transform per frame, ready for {@link #score}. */
@@ -724,6 +914,12 @@ public final class Arbiter {
 
         /** One sentence naming what produced these, for the saved record. */
         public String provenance() {
+            if (fromTheRecordingAlone) {
+                return String.format(Locale.US, "movement measured by phase correlation between"
+                                + " consecutive frames of the recording itself, before any engine"
+                                + " ran, %d frames, bound %.1f px at %s",
+                        cumulative.length, maxShift, measuredAt.provenance());
+            }
             return String.format(Locale.US, "shifts recovered by phase correlation between the raw"
                             + " and registered recordings, %d frames, bound %.1f px at %s",
                     cumulative.length, maxShift, measuredAt.provenance());
@@ -774,11 +970,14 @@ public final class Arbiter {
         private final double meanSdControl;
         private final double validFraction;
         private final MotionPreservation motion;
+        private final boolean sharedControl;
 
         Scoring(int frames, int width, int height, Transform[] cumulative, Transform[] control,
                 ControlWarp.Interpolation interpolation, ControlWarp.Margin margin,
                 double[] residualBefore, double[] residualAfter, double meanSdRegistered,
-                double meanSdControl, double validFraction, MotionPreservation motion) {
+                double meanSdControl, double validFraction, MotionPreservation motion,
+                boolean sharedControl) {
+            this.sharedControl = sharedControl;
             this.frames = frames;
             this.width = width;
             this.height = height;
@@ -960,12 +1159,27 @@ public final class Arbiter {
             return motion;
         }
 
+        /**
+         * Whether the control was built from transforms other than this arm's.
+         *
+         * <p>True in a comparison, where every arm is measured against one control
+         * built from the recording's own movement, and false when one arm is rated
+         * on its own. It changes what the figure means, so it travels with the
+         * figure - see the {@code score} overload that takes control transforms.
+         */
+        public boolean sharedControl() {
+            return sharedControl;
+        }
+
         /** One sentence naming what produced these numbers, for the saved record. */
         public String provenance() {
             return String.format(Locale.US, "sd_vs_control over %d frames of %dx%d, %s"
-                            + " resampling, %s, control = fractional part only of each frame's"
-                            + " transform (defect D11)",
-                    frames, width, height, interpolation.words(), margin);
+                            + " resampling, %s, control = fractional part only of %s (defect D11)",
+                    frames, width, height, interpolation.words(), margin,
+                    sharedControl
+                            ? "the recording's own movement, measured before any engine ran and"
+                                    + " shared by every arm of this comparison"
+                            : "each frame's transform");
         }
 
         private static double median(double[] values) {
