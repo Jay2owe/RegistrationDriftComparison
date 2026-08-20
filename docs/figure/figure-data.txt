@@ -1,0 +1,37 @@
+Registration & Drift Comparison 0.1.0 - figure data
+recording: C:\Users\Owner\UK Dementia Research Institute Dropbox\Brancaccio Lab\Jamie\Experiments\Log-Ratio Registration\library\04_drift\original.tif
+channel:   1
+Fiji:      C:/Users/Owner/.imagej-plugin-test-harness/Fiji.app
+
+raw: 512 x 512, 48 frames
+
+compare mode, every arm it considered:
+  StackReg                           ok           sd_vs_control -35.59%  rank 1  residual 1.92 -> 0.79 px  path 97.6 px  net 4.5 px  cpu 1.8 s
+  MultiStackReg                      ok           sd_vs_control -35.59%  rank 1  residual 1.92 -> 0.79 px  path 97.6 px  net 4.5 px  cpu 1.9 s
+  Linear Stack Alignment with SIFT   ok           sd_vs_control -15.24%  rank 3  residual 1.92 -> 0.93 px  path 100.8 px  net 5.2 px  cpu 12.1 s
+  TurboReg                           could_not_drive no figure            rank -  residual NaN -> NaN px  path NaN px  net NaN px  cpu NaN s
+  Correct 3D drift                   could_not_drive no figure            rank -  residual NaN -> NaN px  path NaN px  net NaN px  cpu 0.0 s
+  Descriptor-based registration      could_not_drive no figure            rank -  residual NaN -> NaN px  path NaN px  net NaN px  cpu NaN s
+  Register Virtual Stack Slices      could_not_drive no figure            rank -  residual NaN -> NaN px  path NaN px  net NaN px  cpu NaN s
+  Image Stabilizer                   not installed
+  Fast4DReg                          not installed
+  NanoJ-Core                         not installed
+
+the recommendation, from the bundled calibration, before any engine ran:
+  rank 1  TurboReg                           median error 0.335 px across 3 phase-contrast seeds (0.232 to 0.469) on the CLEAN condition, 7.0 CPU ms per frame pair (thirdparty_2026-08-11.csv, CHAIN row) [outside_calibrated_range]
+  rank 2  StackReg                           median error 0.335 px across 3 phase-contrast seeds (0.232 to 0.469) on the CLEAN condition, 7.0 CPU ms per frame pair (thirdparty_2026-08-11.csv, CHAIN row) [outside_calibrated_range]
+  rank 3  MultiStackReg                      no measured row: the bundled calibration never ran this engine, so it is placed after every engine it did run and is not compared with them. [outside_calibrated_range]
+  rank 4  Correct 3D drift                   no measured row: the bundled calibration never ran this engine, so it is placed after every engine it did run and is not compared with them. [outside_calibrated_range]
+  rank 5  Descriptor-based registration      no measured row: the bundled calibration never ran this engine, so it is placed after every engine it did run and is not compared with them. [outside_calibrated_range]
+  rank 6  Register Virtual Stack Slices      no measured row: the bundled calibration never ran this engine, so it is placed after every engine it did run and is not compared with them. [outside_calibrated_range]
+  rank 7  Linear Stack Alignment with SIFT   no measured row: the bundled calibration never ran this engine, so it is placed after every engine it did run and is not compared with them. [outside_calibrated_range]
+  rank 8  Image Stabilizer                   no measured row: the bundled calibration never ran this engine, so it is placed after every engine it did run and is not compared with them. [outside_calibrated_range]
+  rank 9  Fast4DReg                          no measured row: the bundled calibration never ran this engine, so it is placed after every engine it did run and is not compared with them. [outside_calibrated_range]
+  rank 10  NanoJ-Core                         no measured row: the bundled calibration never ran this engine, so it is placed after every engine it did run and is not compared with them. [outside_calibrated_range]
+apply StackReg: ok, sd_vs_control -35.59%, 1.7 CPU s
+apply Linear Stack Alignment with SIFT: ok, sd_vs_control -15.24%, 12.5 CPU s
+
+every panel cropped by 8 px on all four sides (largest net displacement any arm walked, 5.2 px, rounded up, plus 2), leaving 496 x 496
+residual maps stretched black-to-white over 7.3064 to 109.5330 grey levels per frame, taken from the raw map and used for all three
+
+wrote registration-comparison.png, 988 x 834

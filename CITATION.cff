@@ -1,0 +1,60 @@
+cff-version: 1.2.0
+message: "If you use this plugin, please cite it as below, and also cite the registration plugin you actually ran."
+type: software
+title: "Registration & Drift Comparison"
+abstract: >-
+  ImageJ/Fiji plugin that measures the movement in a time-lapse stack, says
+  whether it can be registered, names registration engines from measurements
+  taken on real recordings, and scores any registration against an
+  interpolation-matched control. It ships no registration engine of its own.
+authors:
+  - given-names: Jamie
+    family-names: Malcolm
+    orcid: "https://orcid.org/0009-0008-3862-2776"
+    affiliation: "UK Dementia Research Institute at Imperial College London"
+    email: jamiemalcolm12@gmail.com
+repository-code: "https://github.com/Jay2owe/RegistrationDriftComparison"
+url: "https://github.com/Jay2owe/RegistrationDriftComparison"
+license: BSD-3-Clause
+version: "0.1.0"
+date-released: "2026-08-14"
+keywords:
+  - imagej
+  - fiji
+  - registration
+  - drift-correction
+  - time-lapse
+  - microscopy
+  - image-analysis
+# No `doi:` field. Nothing has been archived, so there is no DOI to quote, and a
+# placeholder in a citation file is worse than an absent field: it is copied into
+# somebody's methods section and resolves to nothing. A DOI is added here when a
+# release is actually archived.
+references:
+  # The two engine modules compiled into this release. Neither is a separate
+  # install - both are shaded into the plugin jar under regdrift.internal.* and a
+  # user never learns they exist - but their source is needed to rebuild it, so
+  # they are named here. Neither is archived yet, so neither carries a DOI.
+  - type: software
+    title: "oc3d-core"
+    version: "0.2.0"
+    year: 2026
+    license: BSD-3-Clause
+    repository-code: "https://github.com/Jay2owe/oc3d-core"
+    notes: "Shared chassis module, compiled into Registration & Drift Comparison 0.1.0."
+    authors:
+      - given-names: Jamie
+        family-names: Malcolm
+        orcid: "https://orcid.org/0009-0008-3862-2776"
+        affiliation: "UK Dementia Research Institute at Imperial College London"
+  - type: software
+    title: "autofix-core"
+    version: "0.1.0"
+    year: 2026
+    license: BSD-3-Clause
+    notes: "Dependency detection and repair module, compiled into Registration & Drift Comparison 0.1.0."
+    authors:
+      - given-names: Jamie
+        family-names: Malcolm
+        orcid: "https://orcid.org/0009-0008-3862-2776"
+        affiliation: "UK Dementia Research Institute at Imperial College London"
