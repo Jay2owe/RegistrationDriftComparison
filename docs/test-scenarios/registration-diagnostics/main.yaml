@@ -1,0 +1,94 @@
+schema_version: 1
+id: registration-diagnostics-launch
+name: Open Registration Diagnostics and cancel cleanly
+description: >
+  Proves the installed plugin is reachable from its registered menu entry,
+  opens the diagnostics dialog with a recording available, and closes without
+  writing results when Cancel is pressed.
+
+requires:
+  test_automation: true
+  physical_input: true
+  plugin_under_test: true
+  plugin: Registration and Drift Comparison
+  menu_path: [Plugins, Registration, "Registration Diagnostics..."]
+
+policy:
+  allow_labels: ["Registration Diagnostics...", Cancel]
+  allow_risks: [read_only, reversible, mutating]
+  allow_write_roots: [exports]
+  allow_legacy_selectors: false
+  reviewer: harness
+  reason: >
+    The route uses a synthetic image in the disposable Fiji sandbox, opens the
+    plugin's real menu entry, then cancels before any analysis or file write.
+
+setup:
+  - id: fixture_image
+    name: create a short synthetic recording
+    action: run_macro
+    risk: mutating
+    macro: |
+      newImage("regdrift_diagnostics_fixture", "8-bit noise", 64, 64, 8);
+    expect:
+      first_feedback:
+        within_ms: 2000
+        any_of: [window_appeared, image_revision_changed]
+      completion:
+        within_ms: 10000
+        console_errors: absent
+
+steps:
+  - id: open_menu
+    name: click Plugins > Registration > Registration Diagnostics...
+    action: physical_menu
+    risk: mutating
+    window: {title: "(Fiji Is Just) ImageJ", match: contains}
+    menu_path: [Plugins, Registration, "Registration Diagnostics..."]
+    expect:
+      dispatch: {visible: true, enabled: true, exactly_once: true}
+      first_feedback:
+        within_ms: 3000
+        any_of: [window_appeared, focus_changed]
+      completion:
+        within_ms: 10000
+        window_present: "Registration & Drift Comparison - Registration Diagnostics"
+        unexpected_modal: false
+        console_errors: absent
+
+  - id: inspect_dialog
+    name: verify the diagnostics dialog is visible and cancellable
+    action: inspect_ui
+    risk: read_only
+    window: {title: "Registration & Drift Comparison - Registration Diagnostics", match: exact}
+    assertions:
+      - kind: component_state
+        window: "Registration & Drift Comparison - Registration Diagnostics"
+        component: {role: button, name: Cancel, match: exact}
+        expected: {enabled: true, showing: true}
+      - kind: no_uncaught_exceptions
+
+teardown:
+  - id: cancel_dialog
+    name: cancel the diagnostics dialog
+    action: physical_click
+    risk: reversible
+    window: {title: "Registration & Drift Comparison - Registration Diagnostics", match: exact}
+    component: {role: button, name: Cancel, match: exact}
+    expect:
+      dispatch: {visible: true, enabled: true, exactly_once: true}
+      first_feedback:
+        within_ms: 1000
+        any_of: [window_closed]
+      completion:
+        within_ms: 5000
+        window_absent: "Registration & Drift Comparison - Registration Diagnostics"
+        unexpected_modal: false
+
+cleanup:
+  close_windows: ["Registration & Drift Comparison - Registration Diagnostics"]
+  close_all_images: true
+  clear_results: true
+  reset_roi_manager: true
+  expect_no_new_files: true
+  fixture_hashes_unchanged: true

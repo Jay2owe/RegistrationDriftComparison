@@ -13,6 +13,14 @@ tools-build/
 # Temp files
 *.tmp.*
 
+# Build logs written beside the pom rather than into target/. `mvn ... | tee
+# target-fullsuite.log` at the repository root is the shape this catches: it
+# reads as source, it is the size of a small library, and it is a transcript of
+# one run on one machine that VALIDATION.md already records properly.
+/*.log
+/*.out
+/*.txt.bak
+
 # OS
 .DS_Store
 Thumbs.db
@@ -31,3 +39,6 @@ tools/
 # `docs/regdrift-build/` is the build plan every later stage reads, and
 # `src/test/` holds the test suite, so both are tracked. Stage 16 decides what
 # is stripped for publication.
+
+# Internal working documents
+PUBLISHING_AUDIT.md
