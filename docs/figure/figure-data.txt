@@ -1,7 +1,7 @@
 Registration & Drift Comparison 0.1.0 - figure data
-recording: C:\Users\Owner\UK Dementia Research Institute Dropbox\Brancaccio Lab\Jamie\Experiments\Log-Ratio Registration\library\04_drift\original.tif
+recording: <library>\04_drift\original.tif
 channel:   1
-Fiji:      C:/Users/Owner/.imagej-plugin-test-harness/Fiji.app
+Fiji:      <Fiji.app>
 
 raw: 512 x 512, 48 frames
 

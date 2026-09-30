@@ -121,10 +121,11 @@
 		  repository long after the source it was built from has moved on, so
 		  "which build is in this jar" stops having an answer.
 
-		  Neither core is published to any remote repository, by design. If
-		  resolution fails, run `mvn install` in
-		  `ImageJ Plugins/Cores/oc3d-core/` and
-		  `ImageJ Plugins/Cores/autofix-core/` first.
+		  Both cores are public on GitHub and neither is published to a Maven
+		  repository. If resolution fails, clone
+		  https://github.com/Jay2owe/oc3d-core at tag v0.2.0 and
+		  https://github.com/Jay2owe/autofix-core at tag v0.1.0 and run
+		  `mvn install` in each first.
 		-->
 		<dependency>
 			<groupId>io.github.jay2owe</groupId>

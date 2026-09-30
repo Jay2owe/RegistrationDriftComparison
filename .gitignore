@@ -34,11 +34,21 @@ tools/
 *conflicted copy*
 .conflicted-copies-*/
 
-# Diverges from CPC's .gitignore on purpose: CPC also ignores `docs/` and
-# `src/test/` because it is a public repository with local-only material. Here
-# `docs/regdrift-build/` is the build plan every later stage reads, and
-# `src/test/` holds the test suite, so both are tracked. Stage 16 decides what
-# is stripped for publication.
+# Public tree, decided for 0.1.0: the source, the test suite, the build, the
+# README, VALIDATION.md and the documents they link (docs/D11, D12, D13,
+# docs/figure/, docs/screenshots/). The build plan, internal reviews, harness
+# hand-offs and scenario notes stay on disk and out of the public tree, as does
+# the RIPR note (RIPR is not part of 0.1.0) and the wiki draft (kept with the
+# release plan).
+docs/regdrift-build/
+docs/release-plan/
+docs/release-plan_COMPLETED/
+docs/test-scenarios/
+docs/REVIEW-*.md
+docs/TEST_HANDOFF.md
+docs/ripr-registration.md
+docs/wiki-page.md
+docs/D12_MEASUREMENT_corr.md
 
 # Internal working documents
 PUBLISHING_AUDIT.md

@@ -53,8 +53,8 @@ import java.util.Set;
  * <h2>The library is not in this repository, and that is deliberate</h2>
  *
  * <p>Twelve recordings of 38 to 132 MB each live in
- * {@code Experiments\Log-Ratio Registration\library\}, which is a Dropbox-backed
- * folder beside this one and is read-only to this build. {@link #library()}
+ * a local copy of the validation library, outside this repository and
+ * read-only to this build. {@link #library()}
  * returns null on any machine that does not have it, every test that needs it
  * says so and skips, and {@code mvn test} stays green and fast on a machine that
  * has only checked this repository out. The runs that produced
@@ -95,7 +95,7 @@ public final class Fixtures {
      * The library folder, or null when this machine does not have it.
      *
      * <p>Looked for once. A folder that exists but whose twelve entries are not
-     * there - a Dropbox placeholder tree that has never been hydrated - counts as
+     * there - a synced placeholder tree that has never been downloaded - counts as
      * not having it, because the failure it would otherwise produce is a slow one
      * that looks like a defect in this plugin.
      */
@@ -328,7 +328,7 @@ public final class Fixtures {
             ImagePlus imp = IJ.openImage(file.getAbsolutePath());
             if (imp == null) {
                 throw new IllegalStateException("could not open " + file.getAbsolutePath()
-                        + "; the library entry may be a Dropbox placeholder rather than a file");
+                        + "; the library entry may be a cloud-sync placeholder rather than a file");
             }
             int frames;
             try {

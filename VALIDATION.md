@@ -10,7 +10,7 @@ against fixtures and against its own assumptions.
 **Plugin:** `RegistrationDriftComparison 0.1.0-SNAPSHOT`, at `e35f6e0` plus this stage.
 **Library:** `Experiments\Log-Ratio Registration\library\`, twelve entries, all hydrated locally
 (38 MB each for the seven 512² entries, 85 MB for the four 768², 133 MB for `12_long_baseline_9d`).
-**Fiji used for the engine runs:** `C:\Users\Owner\.imagej-plugin-test-harness\Fiji.app`, which has
+**Fiji used for the engine runs:** a test-harness Fiji (`<Fiji.app>` below), which has
 TurboReg 2.0.1, StackReg 2.0.1, MultiStackReg 1.46.5, Correct 3D Drift 1.0.7 and mpicbg 1.6.0
 (Linear Stack Alignment with SIFT) installed.
 
@@ -32,9 +32,9 @@ java -Xmx6g -Dregdrift.library=<library> -cp "$CP" \
 java -Xmx6g -cp "$CP" org.junit.runner.JUnitCore regdrift.validation.BenchmarkFixture
 ```
 
-`<library>` is
-`C:/Users/Owner/UK Dementia Research Institute Dropbox/Brancaccio Lab/Jamie/Experiments/Log-Ratio Registration/library`
-and `<Fiji.app>` is `C:/Users/Owner/.imagej-plugin-test-harness/Fiji.app`. The exact command for every
+`<library>` is a local copy of the twelve-recording validation library
+(`Experiments/Log-Ratio Registration/library` in the author's lab storage) and `<Fiji.app>` is the
+test-harness Fiji named above. The exact command for every
 measurement below is written beside it.
 
 **Every one of these runs skips with its reason printed on a machine that lacks what it needs** — the
