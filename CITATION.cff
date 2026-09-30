@@ -17,7 +17,7 @@ repository-code: "https://github.com/Jay2owe/RegistrationDriftComparison"
 url: "https://github.com/Jay2owe/RegistrationDriftComparison"
 license: BSD-3-Clause
 version: "0.1.0"
-date-released: "2026-08-14"
+date-released: "2026-09-30"
 keywords:
   - imagej
   - fiji
