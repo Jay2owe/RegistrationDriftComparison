@@ -90,5 +90,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: RegistrationDriftComparison-jar
-          path: plugin/target/RegistrationDriftComparison-0.1.0.jar
+          path: |
+            plugin/target/RegistrationDriftComparison-*.jar
+            !plugin/target/*-sources.jar
+            !plugin/target/*-tests.jar
+            !plugin/target/*-javadoc.jar
           if-no-files-found: error

@@ -16,7 +16,7 @@ authors:
 repository-code: "https://github.com/Jay2owe/RegistrationDriftComparison"
 url: "https://github.com/Jay2owe/RegistrationDriftComparison"
 license: BSD-3-Clause
-version: "0.1.0"
+version: "0.2.0"
 date-released: "2026-09-30"
 keywords:
   - imagej
@@ -41,7 +41,7 @@ references:
     year: 2026
     license: BSD-3-Clause
     repository-code: "https://github.com/Jay2owe/oc3d-core"
-    notes: "Shared chassis module, compiled into Registration & Drift Comparison 0.1.0."
+    notes: "Shared chassis module, compiled into Registration & Drift Comparison 0.2.0."
     authors:
       - given-names: Jamie
         family-names: Malcolm
@@ -53,7 +53,7 @@ references:
     year: 2026
     license: BSD-3-Clause
     repository-code: "https://github.com/Jay2owe/autofix-core"
-    notes: "Dependency detection and repair module, compiled into Registration & Drift Comparison 0.1.0."
+    notes: "Dependency detection and repair module, compiled into Registration & Drift Comparison 0.2.0."
     authors:
       - given-names: Jamie
         family-names: Malcolm

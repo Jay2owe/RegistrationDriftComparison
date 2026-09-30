@@ -92,7 +92,7 @@ scale it was measured at** (`measured_at_bin`), and **nothing in the verdict rea
 no scale tested does a cut separate the recordings that register from the recordings that do not.
 Rank correlation against the reduction in temporal standard deviation, over the twelve validation
 recordings, was **+0.51, +0.50, +0.13 and −0.10 at bins 1, 2, 4 and 8**. A threshold (defect D12)
-is deferred to 0.2.0: it needs localisability measured against registration outcome across
+is deferred to a later version: it needs localisability measured against registration outcome across
 instruments and modalities, not twelve recordings from one. The confidence signal the verdict
 actually routes on is agreement between the two independent estimators, which does order those
 recordings. Evidence: [`docs/D12_MEASUREMENT.md`](docs/D12_MEASUREMENT.md).
@@ -135,31 +135,27 @@ Two estimators, both measuring whole-field translation. A recording whose parts 
 rotation, scaling, a stage tilt, tissue deforming — is outside what the diagnosis describes. It will
 still report numbers, and those numbers will be about the translation component.
 
-### Slow drift on a large frame is under-read
+### 0.2.0's drift reading is not yet re-checked on the validation recordings
 
-A frame 256 pixels or more on its shorter side is measured binned three or four ways
-(`measured_at_bin`). At that scale a drift slower than about 2 pixels per frame is a fraction of a
-binned pixel per frame, and the phase-correlation peak fit reads a fraction of a pixel short. On
-synthetic recordings with known drift, `drift_rate_px` read **0.39 for a true 0.84** and **1.01 for
-a true 1.68** pixels per frame at bin 4; at 3.3 pixels per frame and faster it read within 8%, and at
-bin 1 within 4% at every speed tested. `severity` can land one band lower as a result. The
-recommendation does not read the drift rate. The verdict reads the gap between the two estimators,
-which this widens: it reached 0.38 pixels in those runs, against a limit of 5. A sub-pixel fit without this bias changes the
-measurement the bundled calibration was taken with, so it waits for 0.2.0 and a re-measured
-calibration.
+0.1.0 read slow drift short (about half size below 2 pixels per frame on frames of 256 pixels or
+more) and so gave Compare no ranking on steady drift of 0.3 to 1.5 pixels per frame. 0.2.0 fixes
+both. On synthetic recordings of known drift `drift_rate_px` now reads 98-101% of 0.2 to 4 pixels
+per frame at every measurement scale, and real StackReg and MultiStackReg are scored and ranked on
+the drift that 0.1.0 refused. **The twelve real validation recordings in
+[`VALIDATION.md`](VALIDATION.md) were measured with 0.1.0's reading and have not been re-run on
+0.2.0.** Expect `severity` to come out one band stronger than 0.1.0 said on a recording with slow
+drift: on the test fixtures one word moved, `severe` to `extreme`, on a 256-pixel recording whose
+drift 0.1.0 read as 0.33 and is 0.71 pixels per frame. Nothing else in the diagnosis's words, the
+verdict or the recommendation moved on those fixtures.
 
-### Compare can give no score on steady slow drift
+### Compare on a small frame can lose track of a correct engine
 
-Compare scores every arm over the part of the frame that stays filled once the recording's own
-movement is taken out, and it measures that movement itself at full resolution. On steady drift of
-roughly 0.3 to 1.5 pixels per frame that measurement falls short, for the same peak-fit reason as
-above: about 6 pixels of a true 14 over 24 frames. An engine that registers the recording correctly
-then moves the picture further than that region allows, and its row says it "put the content outside
-the region every arm of this comparison is measured over" and carries no `sd_vs_control` and no
-rank. On test recordings real StackReg and MultiStackReg were refused a score this way at 0.3, 0.6
-and 1.5 pixels per frame (128- and 256-pixel frames), and both scored, tied exactly, at 0.2, 2.5
-and 4.0. Nothing is ranked on a figure that could be wrong; the cost is no ranking at all on those
-recordings. The fix is the same 0.2.0 change as above.
+To score an arm, Compare measures where the engine put the content in each frame, and that search is
+bounded at a quarter of the frame. On a 128-pixel frame that is 32 pixels. When the recording drifts
+further than that in total (1.5 pixels per frame over 24 frames, for example), or a frame reads near
+the bound, the arm is reported with its reason and left out of the ranking rather than ranked on a
+figure that could be wrong. On test recordings with real StackReg and MultiStackReg this happened on
+2 of 10 steady-drift cases, both on 128-pixel frames; every 256-pixel case was scored.
 
 ### Batch parallelism is restricted to diagnose and recommend
 
@@ -279,8 +275,8 @@ sites**, tick **Registration-Drift-Comparison**, or add it with **Add unlisted s
 updater then keeps the plugin current. The update site is being set up; until it is live, install by
 hand as below.
 
-**By hand.** Download `RegistrationDriftComparison-0.1.0.jar` from the
-[GitHub release](https://github.com/Jay2owe/RegistrationDriftComparison/releases/tag/v0.1.0), drop it
+**By hand.** Download `RegistrationDriftComparison-0.2.0.jar` from the
+[GitHub release](https://github.com/Jay2owe/RegistrationDriftComparison/releases/tag/v0.2.0), drop it
 into `Fiji.app/plugins/` and restart Fiji. A jar installed this way is not updated for you.
 
 One jar, no prerequisites. The registration plugins it drives are detected at run time; none of them
@@ -307,7 +303,7 @@ cd RegistrationDriftComparison
 bash mvnw clean package
 ```
 
-The jar is `target/RegistrationDriftComparison-0.1.0.jar`. The same steps run in CI on every push.
+The jar is `target/RegistrationDriftComparison-<version>.jar`. The same steps run in CI on every push.
 
 ---
 
@@ -504,7 +500,7 @@ the plugin version and the exact run command beside each measurement. In short:
 
 ## Citing
 
-> Malcolm, J. (2026). *Registration & Drift Comparison* (version 0.1.0) [Computer software].
+> Malcolm, J. (2026). *Registration & Drift Comparison* (version 0.2.0) [Computer software].
 > https://github.com/Jay2owe/RegistrationDriftComparison
 
 GitHub's **Cite this repository** button gives the same reference from

@@ -4,7 +4,9 @@ All notable changes to Registration & Drift Comparison are documented here. The
 format follows [Keep a Changelog](https://keepachangelog.com/) and this project
 adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.2.0] - 2026-09-30
+
+Fixes the slow-drift reading of 0.1.0. Everything else is unchanged.
 
 ### Fixed
 
@@ -17,21 +19,37 @@ adheres to [Semantic Versioning](https://semver.org/).
   still found without the weight, so the two estimators still fail
   independently. On synthetic recordings of known drift, `drift_rate_px` now
   reads 98–101% of 0.2–4 px per frame at bin 1, 2 and 4 (0.1.0: 43–57% at bin 4
-  below 2 px per frame), and Compare mode scores both StackReg arms on steady
-  drift of 0.36–1.8 px per frame, where 0.1.0 gave no ranking.
+  below 2 px per frame).
+- **Compare ranks correct engines on steady slow drift.** With real StackReg
+  and MultiStackReg in a test Fiji, both were scored and ranked (tied, rank 1)
+  on 8 of 10 synthetic steady-drift recordings of 0.36–1.8 px per frame on 128
+  and 256 px frames. 0.1.0 scored neither on any of them.
 
 ### Changed
 
-- **The golden outputs were regenerated for that fix.** What moved, on the five
-  golden fixtures: `drift_rate_px` (for example 0.33 → 0.73 on
-  `knock_256x48`, true 0.71), `step_max_px`, `step_rms_px`, `wander`,
-  `agreement_px`, `bridge_max_px`, and the Comparison table's `net_px`,
-  `path_px`, residual figures and `sd_vs_control` (by at most 0.011). One word
-  moved: `knock_256x48`'s severity, `severe` → `extreme`. Localisability, the
-  motion label, the verdict and the whole Recommendation table did not move.
-- **Not yet re-validated against the twelve library recordings.** The
-  thresholds in `VALIDATION.md` were measured with 0.1.0's reading; re-running
-  it needs the library, which is not on this machine.
+- **One severity word can move.** `severity` can come out one band stronger
+  than 0.1.0 said on a recording with slow drift, because the drift is no
+  longer read short. On the golden fixtures one word moved: `knock_256x48`,
+  `severe` → `extreme` (drift read 0.33 by 0.1.0, 0.73 now, true 0.71).
+  Localisability, the motion label, the verdict and the whole Recommendation
+  table did not move.
+- **The golden outputs were regenerated for the fix.** The numbers that moved:
+  `drift_rate_px`, `step_max_px`, `step_rms_px`, `wander`, `agreement_px`,
+  `bridge_max_px`, and the Comparison table's `net_px`, `path_px`, residual
+  figures and `sd_vs_control` (by at most 0.011).
+
+### Known limits
+
+- **Not yet re-checked on the real recording library.** The twelve
+  recordings in `VALIDATION.md` were measured with 0.1.0's reading and have not
+  been re-run on 0.2.0.
+- **Compare's search for where an engine put the content is bounded at a
+  quarter of the frame** (32 px on a 128 px frame). An arm whose content moves
+  further than that, or a frame read near the bound, is reported with its
+  reason and left out of the ranking. This left 2 of the 10 test recordings
+  above unranked, both on 128 px frames (0.6/−0.4 and 1.5/−1.0 px per frame);
+  0.1.0 left them unranked too.
+- Every other known limit of 0.1.0 stands; see below and the README.
 
 ## [0.1.0] - 2026-09-30
 
