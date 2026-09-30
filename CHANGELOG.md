@@ -81,6 +81,8 @@ engine it can run belongs to another plugin and is detected at run time.
   button or typed without Enter; it now reads the folder once the text rests.
   A folder run stopped with Esc now says how many recordings it reached and
   how many it did not, rather than counting the skipped ones as failures.
+- The jar's manifest named `ij`, `oc3d-core` and `autofix-core` jars on its
+  class path although both cores are compiled in; it no longer names any.
 - Unfolding Advanced left the dialog its old size, so the settings it showed
   sat behind a scroll bar. The dialog now resizes to fit, up to its cap of 80%
   of the screen's height.

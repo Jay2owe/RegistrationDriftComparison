@@ -176,6 +176,24 @@
 			-->
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-jar-plugin</artifactId>
+				<configuration>
+					<archive>
+						<manifest>
+							<!--
+							  Both cores are shaded in and users install this jar
+							  alone. Left on, pom-scijava writes a Class-Path naming
+							  ij, oc3d-core and autofix-core jars that do not sit
+							  beside this one in Fiji.
+							-->
+							<addClasspath>false</addClasspath>
+						</manifest>
+					</archive>
+				</configuration>
+			</plugin>
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-shade-plugin</artifactId>
 				<executions>
 					<execution>
