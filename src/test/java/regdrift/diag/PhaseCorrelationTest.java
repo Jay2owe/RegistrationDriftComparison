@@ -149,9 +149,10 @@ public class PhaseCorrelationTest {
      * one.
      *
      * <p>A quarter-pixel truth comes back to within about 0.15 px here, on clean broadband synthetic
-     * data with no noise and no intensity change. That is the parabolic peak fit's honest limit, not a
-     * defect: the correlation surface is sampled on the pixel grid, and three samples through a peak
-     * only locate it so well.
+     * data with no noise and no intensity change. That was the limit of 0.1.0's parabola through three
+     * samples of the peak. 0.2.0 reads the surface between samples from the spectrum instead, and the
+     * tolerance is kept as a floor rather than tightened; {@code SubpixelDriftTest} holds the
+     * refinement to 5% of a known drift.
      */
     @Test
     public void recoversSubPixelShift() {

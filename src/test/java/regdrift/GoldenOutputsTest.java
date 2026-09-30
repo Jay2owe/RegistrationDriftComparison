@@ -114,6 +114,13 @@ public class GoldenOutputsTest {
     /** Regenerates the goldens instead of comparing. Never used to hide a difference. */
     static final String WRITE_SWITCH = "regdrift.golden.write";
 
+    /**
+     * Writes the four tables of every serial run as readable text to the file
+     * named, so a digest that moved can be read cell by cell: run once on each
+     * side of a change and diff the two files.
+     */
+    static final String DUMP_SWITCH = "regdrift.golden.dump";
+
     /** Timing columns, dropped from tables and CSVs. */
     static final Set<String> EXCLUDED = Collections.unmodifiableSet(new HashSet<String>(
             Arrays.asList("cpu_seconds", "run_utc")));
@@ -171,6 +178,8 @@ public class GoldenOutputsTest {
 
     private Map<String, String> digests(boolean serial) throws IOException {
         Map<String, String> out = new TreeMap<String, String>();
+        String dumpTo = serial ? System.getProperty(DUMP_SWITCH) : null;
+        StringBuilder dump = new StringBuilder();
         for (Fixture fixture : fixtures()) {
             for (Mode mode : Mode.values()) {
                 arms.fixture = fixture;
@@ -195,6 +204,15 @@ public class GoldenOutputsTest {
                 out.put(key + "verdict", String.valueOf(result.verdict()));
                 out.put(key + "registered", result.registered() == null ? "none"
                         : sha(pixels(result.registered())));
+                if (dumpTo != null) {
+                    dump.append("# ").append(fixture.name).append(' ').append(mode.macroValue())
+                            .append(" verdict=").append(result.verdict()).append(" failure=")
+                            .append(result.failure() == null ? "none" : result.failure().kind())
+                            .append('\n');
+                    dump.append("## diagnosis\n").append(readable(result.diagnosis()));
+                    dump.append("## recommendation\n").append(readable(result.recommendation()));
+                    dump.append("## comparison\n").append(readable(result.comparison()));
+                }
 
                 RegDriftAutoSave.Report report = RegDriftAutoSave.save(result);
                 out.put(key + "tree", report.isSuccess()
@@ -202,7 +220,34 @@ public class GoldenOutputsTest {
                         : "save failed: " + report.failure().kind());
             }
         }
+        if (dumpTo != null) {
+            Files.write(new File(dumpTo).toPath(), dump.toString().getBytes(StandardCharsets.UTF_8));
+        }
         return out;
+    }
+
+    /** A table as one line per row of {@code column=value}, numbers to 4 decimals. */
+    static String readable(ResultsTable table) {
+        if (table == null) return "null\n";
+        StringBuilder text = new StringBuilder();
+        String[] headings = table.getHeadings();
+        for (int row = 0; row < table.size(); row++) {
+            for (String column : headings) {
+                if (column == null || column.isEmpty() || EXCLUDED.contains(column)) continue;
+                double value;
+                try {
+                    value = table.getValue(column, row);
+                } catch (RuntimeException words) {
+                    value = Double.NaN;
+                }
+                String cell = !Double.isNaN(value)
+                        ? String.format(java.util.Locale.ROOT, "%.4f", value)
+                        : String.valueOf(table.getStringValue(column, row));
+                text.append(column).append('=').append(cell).append('\t');
+            }
+            text.append('\n');
+        }
+        return text.toString();
     }
 
     // ------------------------------------------------------------ canonical text

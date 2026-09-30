@@ -71,6 +71,36 @@ public final class PhaseCorrelation implements Estimator {
      */
     private static final double SPECTRAL_FLOOR = 1e-6;
 
+    /**
+     * Width of the Gaussian weight on the normalised cross-power spectrum, in
+     * radians per pixel (Nyquist is pi).
+     *
+     * <p><b>Why phase correlation needs one here.</b> A camera pixel integrates
+     * over its area, and so does binning. A frame moved by a fraction {@code f} of
+     * a pixel is then, to a close approximation, each pixel mixed with its
+     * neighbour in proportions {@code 1 - f} and {@code f}. That mixing shifts low
+     * frequencies by {@code f} and high ones by less - at Nyquist not at all -
+     * and plain phase correlation gives every frequency the same vote, so a
+     * slow drift read short. Measured on the synthetic drifting recordings in
+     * {@code SubpixelDriftTest}: with no weight, {@code drift_rate_px} read 62-79%
+     * of a true 0.2-1.7 px per frame at bin 4 even with an exact peak; with
+     * this weight, 99-101%.
+     *
+     * <p>0.5 is the middle of the three widths measured. 0.3 read a single pair
+     * slightly closer and over-read one bin-4 case by 5%; 0.8 under-read by up to
+     * 6% at bin 1. The weight is applied after the magnitude is normalised, so
+     * phase correlation stays insensitive to contrast.
+     *
+     * <p><b>Only the sub-pixel step sees it.</b> The whole-pixel peak is still
+     * found on the unweighted surface. Weighting that surface too let phase
+     * correlation lock on to a narrow-band recording that 0.1.0 could not read,
+     * so it agreed with the pyramid search there and the recording no longer
+     * reached {@code estimators_disagree} ({@code VerdictTest}). The two
+     * estimators are meant to fail independently, so the weight is kept out of
+     * which peak is chosen.
+     */
+    static final double SPECTRAL_WEIGHT_SIGMA = 0.5;
+
     /** Total fraction of each axis given over to the border taper, split between the two edges. */
     private static final double TAPER_FRACTION = 0.25;
 
@@ -218,6 +248,17 @@ public final class PhaseCorrelation implements Estimator {
         // image actually has is dropped rather than promoted to full weight.
         double floorA = SPECTRAL_FLOOR * amplitudeA;
         double floorB = SPECTRAL_FLOOR * amplitudeB;
+        double[] weight = new double[n];
+        for (int k = 0; k < n; k++) {
+            double w = 2 * Math.PI * frequency(k, n) / n;
+            weight[k] = Math.exp(-w * w / (2 * SPECTRAL_WEIGHT_SIGMA * SPECTRAL_WEIGHT_SIGMA));
+        }
+        // The whole-pixel peak is found on the unweighted surface, exactly as 0.1.0 found it, so
+        // the weight cannot change which peak is chosen: phase correlation keeps its own view of
+        // a recording, independent of the pyramid search it is checked against. The weighted
+        // spectrum is kept for the sub-pixel step alone, which reads the surface between samples.
+        double[] spectrumRe = new double[ar.length];
+        double[] spectrumIm = new double[ar.length];
         for (int i = 0; i < ar.length; i++) {
             if (normalise && (Math.hypot(ar[i], ai[i]) < floorA
                     || Math.hypot(br[i], bi[i]) < floorB)) {
@@ -235,6 +276,9 @@ public final class PhaseCorrelation implements Estimator {
             }
             br[i] = re / mag;
             bi[i] = im / mag;
+            double g = normalise ? weight[i % n] * weight[i / n] : 1.0;
+            spectrumRe[i] = br[i] * g;
+            spectrumIm[i] = bi[i] * g;
         }
         fft2(br, bi, n, true);
 
@@ -248,8 +292,9 @@ public final class PhaseCorrelation implements Estimator {
         }
         int py = at / n;
         int px = at % n;
-        double dx = px + parabolic(br, n, px, py, true);
-        double dy = py + parabolic(br, n, px, py, false);
+        double[] refined = refine(spectrumRe, spectrumIm, n, px, py);
+        double dx = refined[0];
+        double dy = refined[1];
         // The correlation surface is periodic, so a displacement to the left appears near the far
         // edge.
         if (dx > n / 2.0) dx -= n;
@@ -268,25 +313,182 @@ public final class PhaseCorrelation implements Estimator {
         return highest;
     }
 
+    // ------------------------------------------------------- the sub-pixel step
+
     /**
-     * Sub-pixel offset of the peak from a parabola through its two neighbours.
+     * How far from the sampled peak the sub-pixel step looks, in pixels.
      *
-     * <p>Clamped to half a pixel. An unclamped fit on a flat or double-peaked
-     * surface can return a large offset from three nearly equal samples, which
-     * would be a confident answer built on nothing.
+     * <p>More than one pixel because the sampled peak comes from the unweighted
+     * surface and the refinement reads the weighted one: when the true shift sits
+     * near a half pixel the two can round to neighbouring whole pixels. At 0.6 the
+     * B9 recording at (1.5, -1.0) px per frame read 89% of its movement; at 1.1 it
+     * reads within 1%.
      */
-    private static double parabolic(double[] s, int n, int px, int py, boolean horizontal) {
-        int before = horizontal ? wrap(px - 1, n) + py * n : px + wrap(py - 1, n) * n;
-        int at = px + py * n;
-        int after = horizontal ? wrap(px + 1, n) + py * n : px + wrap(py + 1, n) * n;
-        double denom = s[before] - 2 * s[at] + s[after];
-        if (Math.abs(denom) < 1e-20) return 0;
-        double d = 0.5 * (s[before] - s[after]) / denom;
-        return Math.max(-0.5, Math.min(0.5, d));
+    static final double REFINE_REACH = 1.1;
+    /** Spacing of the first look along each axis, in pixels. */
+    static final double REFINE_COARSE_STEP = 0.05;
+    /** Spacing of the second look, around the best point of the first. */
+    static final double REFINE_FINE_STEP = 0.0025;
+    /** Rounds of refining x on the peak's row and then y on its column. */
+    static final int REFINE_ROUNDS = 2;
+
+    /**
+     * Where the correlation surface peaks between its samples, read from the
+     * spectrum rather than fitted to three samples.
+     *
+     * <p><b>Why not a parabola.</b> 0.1.0 put a parabola through the peak and its
+     * two neighbours. The surface of a translated image is a narrow sinc-like
+     * peak, not a parabola, and the fit pulls every answer toward the nearest
+     * whole pixel: on a 96 x 96 test pair a true 0.3 px read 0.10 and a true
+     * 0.6 px read 0.78. Summed over a recording that is steady drift read short
+     * (defects B8 and B9).
+     *
+     * <p><b>What this does instead.</b> The inverse transform gives the surface
+     * at whole pixels; the same sum evaluated at a fractional position gives it
+     * anywhere, exactly, with no model of its shape. That is the upsampled-DFT
+     * refinement of Guizar-Sicairos, Thurman and Fienup (2008, Opt. Lett.
+     * 33:156), done along one axis at a time: x along the row through the
+     * current y, then y along the column through the new x, twice. Each line is
+     * searched on a 0.05 px grid within {@link #REFINE_REACH} of the sampled peak,
+     * then on a 0.0025 px grid around the best point, and the last step is a
+     * parabola through three points of that fine grid, where the surface is
+     * smooth enough for a parabola to be exact to well under a thousandth of a
+     * pixel.
+     *
+     * @return {@code {x, y}} in the surface's own indices, not yet unwrapped
+     */
+    private static double[] refine(double[] re, double[] im, int n, int px, int py) {
+        double x = px;
+        double y = py;
+        for (int round = 0; round < REFINE_ROUNDS; round++) {
+            x = refineAxis(re, im, n, true, y, px);
+            y = refineAxis(re, im, n, false, x, py);
+        }
+        return new double[]{x, y};
     }
 
-    private static int wrap(int i, int n) {
-        return (i + n) % n;
+    /**
+     * The highest point of the surface along one line, within
+     * {@link #REFINE_REACH} of the sampled peak.
+     *
+     * @param horizontal true to search x along the row at {@code across}; false to
+     *                   search y along the column at {@code across}
+     * @param centre     the sampled peak's index on the searched axis
+     */
+    private static double refineAxis(double[] re, double[] im, int n, boolean horizontal,
+                                     double across, int centre) {
+        // Collapse the other axis first: line[k] = sum over j of R(j, k) e^{2 pi i f(j) across / n},
+        // so each point on the line then costs n multiplications rather than n^2.
+        double[] tr = new double[n];
+        double[] ti = new double[n];
+        for (int j = 0; j < n; j++) {
+            double angle = 2 * Math.PI * frequency(j, n) * across / n;
+            tr[j] = Math.cos(angle);
+            ti[j] = Math.sin(angle);
+        }
+        double[] lr = new double[n];
+        double[] li = new double[n];
+        if (horizontal) {
+            for (int v = 0; v < n; v++) {
+                double cr = tr[v];
+                double ci = ti[v];
+                int row = v * n;
+                for (int u = 0; u < n; u++) {
+                    double r = re[row + u];
+                    double i = im[row + u];
+                    lr[u] += r * cr - i * ci;
+                    li[u] += r * ci + i * cr;
+                }
+            }
+        } else {
+            for (int v = 0; v < n; v++) {
+                int row = v * n;
+                double sr = 0;
+                double si = 0;
+                for (int u = 0; u < n; u++) {
+                    double r = re[row + u];
+                    double i = im[row + u];
+                    sr += r * tr[u] - i * ti[u];
+                    si += r * ti[u] + i * tr[u];
+                }
+                lr[v] = sr;
+                li[v] = si;
+            }
+        }
+
+        int coarse = (int) Math.round(REFINE_REACH / REFINE_COARSE_STEP);
+        double best = centre;
+        double bestValue = Double.NEGATIVE_INFINITY;
+        for (int k = -coarse; k <= coarse; k++) {
+            double p = centre + k * REFINE_COARSE_STEP;
+            double value = lineValue(lr, li, n, p);
+            if (value > bestValue) {
+                bestValue = value;
+                best = p;
+            }
+        }
+
+        int fine = (int) Math.round(REFINE_COARSE_STEP / REFINE_FINE_STEP);
+        double[] values = new double[2 * fine + 1];
+        int top = fine;
+        for (int k = -fine; k <= fine; k++) {
+            values[k + fine] = lineValue(lr, li, n, best + k * REFINE_FINE_STEP);
+            if (values[k + fine] > values[top]) top = k + fine;
+        }
+        double offset = 0;
+        if (top > 0 && top < values.length - 1) {
+            offset = vertex(values[top - 1], values[top], values[top + 1]);
+        }
+        double found = best + (top - fine + offset) * REFINE_FINE_STEP;
+        return Math.max(centre - REFINE_REACH, Math.min(centre + REFINE_REACH, found));
+    }
+
+    /**
+     * The surface along one collapsed line at position {@code p}: the real part
+     * of {@code sum_k line[k] e^{2 pi i f(k) p / n}}. The rotation is advanced by
+     * one fixed step per term, restarted at the negative frequencies, so a point
+     * costs four trigonometric calls rather than {@code 2n}.
+     */
+    private static double lineValue(double[] lr, double[] li, int n, double p) {
+        double step = 2 * Math.PI * p / n;
+        double sc = Math.cos(step);
+        double ss = Math.sin(step);
+        double sum = 0;
+        int half = n / 2;
+        double c = 1;
+        double s = 0;
+        for (int k = 0; k < half; k++) {
+            sum += lr[k] * c - li[k] * s;
+            double nc = c * sc - s * ss;
+            s = c * ss + s * sc;
+            c = nc;
+        }
+        double start = -half * step;
+        c = Math.cos(start);
+        s = Math.sin(start);
+        for (int k = half; k < n; k++) {
+            sum += lr[k] * c - li[k] * s;
+            double nc = c * sc - s * ss;
+            s = c * ss + s * sc;
+            c = nc;
+        }
+        return sum;
+    }
+
+    /** Signed frequency of transform index {@code k}: 0..n/2-1, then -n/2..-1. */
+    private static int frequency(int k, int n) {
+        return k < n / 2 ? k : k - n;
+    }
+
+    /**
+     * Offset of a parabola's vertex from the middle of three equally spaced
+     * samples, clamped to half a spacing.
+     */
+    private static double vertex(double before, double at, double after) {
+        double denom = before - 2 * at + after;
+        if (Math.abs(denom) < 1e-300) return 0;
+        double d = 0.5 * (before - after) / denom;
+        return Math.max(-0.5, Math.min(0.5, d));
     }
 
     /**
