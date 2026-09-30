@@ -399,6 +399,36 @@ public class DialogsTest {
      * The preview shows which files a pattern takes and which it leaves alone,
      * before anything is opened.
      */
+    /**
+     * A folder filled in by the folder button, or typed without pressing Enter,
+     * still updates the preview. Found by the GUI checks: the preview went on
+     * saying no folder had been chosen.
+     */
+    @Test
+    public void aFolderFilledInWithoutEnterStillUpdatesThePreview() throws Exception {
+        File folder = temp.newFolder("typed");
+        assertTrue(new File(folder, "rec_a.tif").createNewFile());
+        assertTrue(new File(folder, "notes.txt").createNewFile());
+        final BatchDialog dialog = new BatchDialog();
+        final String path = folder.getAbsolutePath();
+        javax.swing.SwingUtilities.invokeAndWait(new Runnable() {
+            @Override public void run() {
+                dialog.folderFieldForTest().setText(path);
+            }
+        });
+        long until = System.currentTimeMillis() + BatchDialog.SETTLE_MS + 5000;
+        while (dialog.previewText().equals(BatchDialog.NOTHING_CHOSEN)
+                && System.currentTimeMillis() < until) {
+            Thread.sleep(50);
+        }
+        javax.swing.SwingUtilities.invokeAndWait(new Runnable() {
+            @Override public void run() { }
+        });
+        String said = dialog.previewText();
+        assertTrue("the preview reads the folder once the text rests: " + said,
+                said.contains("rec_a.tif") && said.contains("notes.txt"));
+    }
+
     @Test
     public void theFolderDialogPreviewsWhatThePatternTakesAndWhatItLeavesAlone() throws IOException {
         File folder = temp.newFolder("plate");

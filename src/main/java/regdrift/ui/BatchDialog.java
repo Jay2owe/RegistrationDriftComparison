@@ -23,6 +23,9 @@ import javax.swing.JComboBox;
 import javax.swing.JLabel;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
+import javax.swing.Timer;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.File;
@@ -107,6 +110,9 @@ public final class BatchDialog {
             "auto", "1", "2", "3", "4", "6", "8",
     };
 
+    /** How long the folder and pattern text has to rest before the preview reads the folder. */
+    static final int SETTLE_MS = 400;
+
     private final DialogForm form;
 
     private JTextField folderField;
@@ -174,6 +180,11 @@ public final class BatchDialog {
         return workerNote.getText();
     }
 
+    /** The folder field itself, so a test can fill it in the way the folder button does. */
+    JTextField folderFieldForTest() {
+        return folderField;
+    }
+
     /** Puts the dialog on the screen. True when OK was pressed. */
     public boolean showModal() {
         return form.showModal();
@@ -233,8 +244,15 @@ public final class BatchDialog {
      *         asks {@link #whatStopsThisRun()} first, so a person never meets it
      */
     public RegDriftBatchParameters parameters() {
-        RegDriftBatchParameters.Builder builder =
-                RegDriftBatchParameters.builder(new File(folder()))
+        return builder().build();
+    }
+
+    /**
+     * Everything the controls say, not yet built, so the menu command can add
+     * the switch Esc pulls before the request is fixed.
+     */
+    public RegDriftBatchParameters.Builder builder() {
+        return RegDriftBatchParameters.builder(new File(folder()))
                         .pattern(patternField.getText())
                         .groupCapture(groupOf(text(groupCombo)))
                         .recursive(recursiveToggle.isSelected())
@@ -245,8 +263,7 @@ public final class BatchDialog {
                         .arbiter(Arbiter.SD_VS_CONTROL)
                         .adviseCeiling(ceilingToggle.isSelected())
                         .movieWorkers(workersOf(text(workersCombo)))
-                        .saveRoot(saveRootField.getText());
-        return builder.build();
+                        .saveRoot(saveRootField.getText().trim());
     }
 
     // ------------------------------------------------------------- the input
@@ -292,6 +309,25 @@ public final class BatchDialog {
         };
         folderField.addActionListener(rescan);
         patternField.addActionListener(rescan);
+        // The folder button fills the field in without pressing Enter, and so does typing;
+        // either way the preview follows once the text has stopped changing.
+        final Timer settle = new Timer(SETTLE_MS, rescan);
+        settle.setRepeats(false);
+        DocumentListener typed = new DocumentListener() {
+            @Override public void insertUpdate(DocumentEvent event) {
+                settle.restart();
+            }
+
+            @Override public void removeUpdate(DocumentEvent event) {
+                settle.restart();
+            }
+
+            @Override public void changedUpdate(DocumentEvent event) {
+                settle.restart();
+            }
+        };
+        folderField.getDocument().addDocumentListener(typed);
+        patternField.getDocument().addDocumentListener(typed);
         groupCombo.addActionListener(rescan);
         recursiveToggle.addChangeListener(new Runnable() {
             @Override public void run() {

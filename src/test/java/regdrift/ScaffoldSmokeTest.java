@@ -41,6 +41,8 @@ public class ScaffoldSmokeTest {
                     "regdrift.CompareRegistration_"},
             {"Plugins>Registration", "Registration Diagnostics...",
                     "regdrift.RegistrationDiagnostics_"},
+            {"Plugins>Registration", "Registration Batch...",
+                    "regdrift.RegistrationBatch_"},
     };
 
     @Test
@@ -82,9 +84,9 @@ public class ScaffoldSmokeTest {
     }
 
     @Test
-    public void pluginsConfigDeclaresBothMenuEntries() throws IOException {
+    public void pluginsConfigDeclaresEveryMenuEntry() throws IOException {
         List<String> lines = readConfigLines();
-        assertEquals("plugins.config should hold exactly the two menu entries",
+        assertEquals("plugins.config should hold exactly the three menu entries",
                 ENTRIES.length, lines.size());
         for (int i = 0; i < ENTRIES.length; i++) {
             String expected = ENTRIES[i][0] + ", \"" + ENTRIES[i][1] + "\", " + ENTRIES[i][2];

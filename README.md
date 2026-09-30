@@ -148,6 +148,19 @@ which this widens: it reached 0.38 pixels in those runs, against a limit of 5. A
 measurement the bundled calibration was taken with, so it waits for 0.2.0 and a re-measured
 calibration.
 
+### Compare can give no score on steady slow drift
+
+Compare scores every arm over the part of the frame that stays filled once the recording's own
+movement is taken out, and it measures that movement itself at full resolution. On steady drift of
+roughly 0.3 to 1.5 pixels per frame that measurement falls short, for the same peak-fit reason as
+above: about 6 pixels of a true 14 over 24 frames. An engine that registers the recording correctly
+then moves the picture further than that region allows, and its row says it "put the content outside
+the region every arm of this comparison is measured over" and carries no `sd_vs_control` and no
+rank. On test recordings real StackReg and MultiStackReg were refused a score this way at 0.3, 0.6
+and 1.5 pixels per frame (128- and 256-pixel frames), and both scored, tied exactly, at 0.2, 2.5
+and 4.0. Nothing is ranked on a figure that could be wrong; the cost is no ranking at all on those
+recordings. The fix is the same 0.2.0 change as above.
+
 ### Batch parallelism is restricted to diagnose and recommend
 
 A folder of recordings runs several at a time in `diagnose` and `diagnose_recommend`, and **one at a
@@ -188,8 +201,6 @@ that engine has no update site, and an engine that cannot be installed is not a 
   this plugin drives align a stack plane by plane in stack order, so on three interleaved channels
   they align channel 3 of one frame onto channel 1 of the next. Every arm is refused a figure with
   its reason, and nothing is scored wrongly — but duplicate the channel you want measured first.
-- **Batch has no menu item yet.** `regdrift.RegDriftBatch` runs a folder from Java and its dialog is
-  built and tested, but no menu entry opens it in 0.1.0.
 - **Linear Stack Alignment with SIFT does not put the content in the same place twice.** It matches
   features through a randomised search. Its ranking was stable across three identical runs on every
   recording where a ranking existed; on one recording it produced a figure on the third run and none
@@ -295,6 +306,12 @@ asks it to run an engine rather than quietly diagnosing instead.
 **Plugins ▸ Registration ▸ Compare Registration Methods…** applies one engine, compares several, or
 scores a registration you already have.
 
+**Plugins ▸ Registration ▸ Registration Batch…** works through a folder of recordings. A filename
+pattern (a regular expression, TIFF files by default) picks the recordings, an optional capture group
+labels them, and a preview lists what will run and what will be skipped before anything starts. It
+runs every mode except `score`, shows no window, and writes one row per recording beside the usual
+tables when an auto-save folder is given. Esc stops it between recordings.
+
 Leave **Measure movement on channel** on **auto** unless you have a reason not to. The plugin ranks the
 channels itself, and picking the one that looks sharpest is often the wrong move, because on
 photon-limited recordings that channel is the noisiest.
@@ -337,6 +354,15 @@ than which boxes happened to be ticked. The three that are empty unless set (`ap
 ```
 run("Registration Diagnostics...", "mode=diagnose_recommend channel=auto slice=project");
 run("Compare Registration Methods...", "mode=compare engines=installed arbiter=sd_vs_control hide_display=true");
+```
+
+A folder run takes `folder`, `pattern`, `group` (`none` or a capture-group number), `recursive`
+(`true`, `false`) and `workers` (`auto` or a count), plus `mode`, `engines`, `apply_engine`,
+`windows`, `window_frames`, `advise_ceiling` and `save_root` as above. From a macro its one-sentence
+summary goes to the Log rather than into a box.
+
+```
+run("Registration Batch...", "folder=[C:/recordings] mode=diagnose_recommend save_root=[C:/results]");
 ```
 
 **No macro option installs anything.** That is asserted over the option names and over the compiled

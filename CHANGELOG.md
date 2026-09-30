@@ -28,7 +28,8 @@ engine it can run belongs to another plugin and is detected at run time.
   their columns fixed in one place, and an auto-save tree that writes them with a
   `README.txt` describing every column.
 - Batch over a folder with a filename regex and a capture group, one row per
-  recording.
+  recording, from **Plugins > Registration > Registration Batch...**. Its line
+  is written to the macro recorder and replays.
 - Engine detection for ten catalogue engines, with a per-engine install action
   that a person presses in a dialog. **No macro option installs anything.**
 - The frozen bundled calibration: `benchmark_2026-08-11.csv`,
@@ -72,6 +73,10 @@ engine it can run belongs to another plugin and is detected at run time.
   comparison then ran to the end. Esc is now watched for the whole run and stops
   it at the next engine. A stop during the last engine, when that engine
   produced nothing, also ended as a finished run; it now ends as stopped.
+- The folder dialog's preview did not follow a folder chosen with its "..."
+  button or typed without Enter; it now reads the folder once the text rests.
+  A folder run stopped with Esc now says how many recordings it reached and
+  how many it did not, rather than counting the skipped ones as failures.
 - Unfolding Advanced left the dialog its old size, so the settings it showed
   sat behind a scroll bar. The dialog now resizes to fit, up to its cap of 80%
   of the screen's height.
@@ -123,6 +128,12 @@ Stated in full at the top of the README, and at length in `VALIDATION.md`.
   bin 3-4, `drift_rate_px` read 0.39 for a true 0.84 and 1.01 for a true 1.68
   pixels per frame on synthetic recordings; 3.3 pixels per frame and faster read
   within 8%, and everything at bin 1 within 4%. Deferred to 0.2.0 below.
+- **Compare can give no score on steady slow drift.** The comparison's own
+  measurement of the movement falls short on 0.3 to 1.5 pixels per frame (about
+  6 of a true 14 pixels over 24 frames), so a correct engine is refused a score
+  as having moved the picture outside the shared region. Real StackReg and
+  MultiStackReg were refused at 0.3, 0.6 and 1.5 pixels per frame and scored,
+  tied exactly, at 0.2, 2.5 and 4.0. Same 0.2.0 fix as the line above.
 - On a recording that moves very little, the shared region every arm is scored
   over is narrow, so a comparison is **most likely to say nothing on exactly the
   recordings that move least**.
