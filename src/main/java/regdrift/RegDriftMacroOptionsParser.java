@@ -153,6 +153,10 @@ public final class RegDriftMacroOptionsParser {
         if (text.length() >= 2 && text.charAt(0) == '[' && text.charAt(text.length() - 1) == ']') {
             text = text.substring(1, text.length() - 1);
         }
+        if (RegDriftMacroOptions.SAVE_ROOT.equals(key)) {
+            // A Windows folder, as getDirectory() returns it, is accepted as written.
+            text = RegDriftMacroOptions.forwardSlashes(text);
+        }
         return RegDriftMacroOptions.requireWritable(key, text);
     }
 }

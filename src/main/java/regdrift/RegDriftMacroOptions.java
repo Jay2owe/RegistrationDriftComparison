@@ -225,8 +225,23 @@ public final class RegDriftMacroOptions {
         return saveRoot;
     }
 
+    /**
+     * The folder the auto-save tree is written under, held with forward slashes.
+     *
+     * <p>A macro line cannot carry a backslash safely (the macro language reads
+     * one inside a string as an escape), and a Windows folder - whether typed,
+     * picked with the dialog's browse button or returned by
+     * {@code getDirectory()} - is written with them. Java and Windows both accept
+     * forward slashes, so the path is stored in that form and the recorded line
+     * replays unchanged.
+     */
     public void setSaveRoot(String saveRoot) {
-        this.saveRoot = clean(saveRoot);
+        this.saveRoot = forwardSlashes(clean(saveRoot));
+    }
+
+    /** A folder path with every backslash turned into a forward slash. */
+    public static String forwardSlashes(String path) {
+        return path == null ? null : path.replace('\\', '/');
     }
 
     public boolean isHideDisplay() {

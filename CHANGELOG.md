@@ -37,6 +37,16 @@ engine it can run belongs to another plugin and is detected at run time.
   becomes a new file beside these, with its own date and a line in this
   changelog.
 
+### Fixed before release
+
+- A `save_root` written with backslashes, as Windows paths are and as the
+  dialog's folder browser fills it in, was refused by the macro parser, so the
+  dialog would not run and the saved `README.txt` and `summary.csv` said the
+  settings could not be written as a macro line. Backslashes now become forward
+  slashes on the way in. This changed the saved-tree digests in
+  `src/test/resources/golden/modes.tsv` and nothing else: every table, verdict
+  and registered-pixel digest is unchanged.
+
 ### Measured, and shipped as measured
 
 Every figure below is in `VALIDATION.md`, with the machine, the date, the plugin
