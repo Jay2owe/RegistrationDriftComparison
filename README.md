@@ -8,7 +8,7 @@ Registration & Drift Comparison is an ImageJ/Fiji plugin that measures the movem
 stack, tells you whether it can be registered, names registration engines from measurements taken on
 real recordings, and scores the result against a control that accounts for interpolation blur.
 
-It installs as one jar with no extra update site. **It ships no registration engine of its own.**
+It installs as one jar and needs no other plugin to install. **It ships no registration engine of its own.**
 Every engine it can run belongs to somebody else, is detected at run time, and is installed if you
 ask for it and never otherwise.
 
@@ -273,7 +273,14 @@ times the recording**, and all of that 12% is the larger frames. A whole diagnos
 
 ## Installation
 
-Drop `RegistrationDriftComparison-0.1.0.jar` into `Fiji.app/plugins/` and restart Fiji.
+**From the update site (recommended).** In Fiji, open **Help ▸ Update…**, click **Manage update
+sites**, tick **Registration-Drift-Comparison**, or add it with **Add unlisted site** and the URL
+`https://sites.imagej.net/Registration-Drift-Comparison/`. Apply the changes and restart Fiji. The
+updater then keeps the plugin current.
+
+**By hand.** Download `RegistrationDriftComparison-0.1.0.jar` from the
+[GitHub release](https://github.com/Jay2owe/RegistrationDriftComparison/releases/tag/v0.1.0), drop it
+into `Fiji.app/plugins/` and restart Fiji. A jar installed this way is not updated for you.
 
 One jar, no prerequisites. The registration plugins it drives are detected at run time; none of them
 is needed to install this one, and none is needed to diagnose a recording or to get a recommendation.
@@ -281,19 +288,25 @@ On a Fiji with no candidate engine installed at all, diagnose and recommend comp
 marked `installed=no`, nothing is downloaded and nothing is written — that is checked in the test
 suite with a proxy in front of the whole process.
 
-There is no update site for this plugin. See [`PUBLISHING_AUDIT.md`](PUBLISHING_AUDIT.md) for what
-distribution steps are outstanding and why none of them has been taken.
-
 ### Build from source
-
-```
-JAVA_HOME=<a JDK> bash mvnw clean package -Denforcer.skip=true
-```
 
 `net.imagej:ij` is the sole runtime dependency. Two modules — `oc3d-core` and `autofix-core` — are
 compiled in at build time, shaded and relocated into `regdrift.internal.*`, and never shipped
-alongside; a user installs one file and never learns they exist. Neither is published to a remote
-repository, so `mvn install` them first if resolution fails.
+alongside; a user installs one file and never learns they exist. Neither is published to a Maven
+repository, so install both from their pinned release tags first. CI builds with JDK 21; the jar
+it produces runs on Java 8 and newer.
+
+```
+git clone --branch v0.2.0 https://github.com/Jay2owe/oc3d-core.git
+mvn -f oc3d-core/pom.xml clean install
+git clone --branch v0.1.0 https://github.com/Jay2owe/autofix-core.git
+mvn -f autofix-core/pom.xml clean install
+git clone https://github.com/Jay2owe/RegistrationDriftComparison.git
+cd RegistrationDriftComparison
+bash mvnw clean package
+```
+
+The jar is `target/RegistrationDriftComparison-0.1.0.jar`. The same steps run in CI on every push.
 
 ---
 
@@ -311,6 +324,8 @@ pattern (a regular expression, TIFF files by default) picks the recordings, an o
 labels them, and a preview lists what will run and what will be skipped before anything starts. It
 runs every mode except `score`, shows no window, and writes one row per recording beside the usual
 tables when an auto-save folder is given. Esc stops it between recordings.
+
+![The Compare Registration Methods dialog: the recording, the channel to measure on, the Z handling, the five modes with Compare installed engines selected, and the calibration note](docs/screenshots/compare-dialog.png)
 
 Leave **Measure movement on channel** on **auto** unless you have a reason not to. The plugin ranks the
 channels itself, and picking the one that looks sharpest is often the wrong move, because on
@@ -331,7 +346,7 @@ photon-limited recordings that channel is the noisiest.
 Fifteen names, and they are the published grammar. A recorded line writes out every setting that has
 a value, including the ones left at their default, so a recorded macro says what the run did rather
 than which boxes happened to be ticked. The three that are empty unless set (`apply_engine`,
-`compare_with` and `save_root`) appear only when they were given.
+`compare_with` and `save_root`) appear when they were given and are left off when empty.
 
 | Option | Values | Default |
 |---|---|---|
@@ -354,6 +369,13 @@ than which boxes happened to be ticked. The three that are empty unless set (`ap
 ```
 run("Registration Diagnostics...", "mode=diagnose_recommend channel=auto slice=project");
 run("Compare Registration Methods...", "mode=compare engines=installed arbiter=sd_vs_control hide_display=true");
+```
+
+The macro recorder writes the whole line. This is what it recorded for a comparison run from the
+dialog, with an auto-save folder set:
+
+```
+run("Compare Registration Methods...", "mode=compare channel=auto slice=project use_roi=false engines=installed windows=auto window_frames=auto arbiter=sd_vs_control flag_motion_loss=true advise_ceiling=true save_root=C:/results hide_display=false serial=false");
 ```
 
 A folder run takes `folder`, `pattern`, `group` (`none` or a capture-group number), `recursive`
@@ -461,9 +483,9 @@ serial, two-worker and max-worker runs are **bit-identical**.
 [`VALIDATION.md`](VALIDATION.md) is the whole record — every number, the date, the machine, the Java,
 the plugin version and the exact run command beside each measurement. In short:
 
-- **590 tests, 0 failures.** The four skipped on a bare `mvn test` need the twelve-recording library,
-  a Fiji with engines in it, or more heap than the build's own 512 MB. All four were run and their
-  figures are in that file.
+- **618 tests, 0 failures.** The eleven skipped on a bare `mvn test`, in four test classes, need the
+  twelve-recording library, an 800 MB recording written to disk, or more heap than the build's own
+  512 MB. All of them were run and their figures are in that file.
 - **Twelve real recordings, 12 of 12** keep the movement they were cut to demonstrate, and none reads
   `not_registrable`. Both recordings predicted to fail before they were run did fail, in the predicted
   way.
@@ -481,8 +503,11 @@ the plugin version and the exact run command beside each measurement. In short:
 
 ## Citing
 
-There is no DOI yet, because nothing has been archived. See [`CITATION.cff`](CITATION.cff) for the
-metadata as it stands.
+> Malcolm, J. (2026). *Registration & Drift Comparison* (version 0.1.0) [Computer software].
+> https://github.com/Jay2owe/RegistrationDriftComparison
+
+GitHub's **Cite this repository** button gives the same reference from
+[`CITATION.cff`](CITATION.cff). There is no DOI, because nothing has been archived.
 
 If this plugin informed a registration choice in your methods section, **please also cite the
 registration plugin you actually used.** It did the work.
@@ -500,7 +525,7 @@ Built on the [Fiji](https://fiji.sc/) / [ImageJ](https://imagej.net/) ecosystem;
 community for the platform.
 
 **And the engine authors, whose plugins do the registering.** The Biomedical Imaging Group at EPFL
-for TurboReg and StackReg (Thévenaz, Ruttimann & Unser 1998, *IEEE Trans. Image Process.* 7:27–41);
+for TurboReg and StackReg (Thévenaz, Ruttimann and Unser 1998, *IEEE Trans. Image Process.* 7:27–41);
 Brad Busse and Kota Miura for MultiStackReg; the mpicbg authors for Linear Stack Alignment with SIFT
 (Lowe 2004, *Int. J. Comput. Vis.* 60:91–110); the authors of Correct 3D drift, Descriptor-based
 registration and Register Virtual Stack Slices, which ship inside Fiji; Kang Li for Image Stabilizer;
@@ -508,7 +533,7 @@ CellMigrationLab for Fast4DReg; and the Henriques lab for NanoJ-Core. This plugi
 their work; it does not replace any of it, and each of them should be cited by whoever runs it.
 
 The two estimators are published prior art, ported deliberately: phase correlation
-(Kuglin & Hines 1975) and a pyramid sum-of-squared-differences search.
+(Kuglin and Hines 1975) and a pyramid sum-of-squared-differences search.
 
 ## License
 

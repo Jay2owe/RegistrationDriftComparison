@@ -58,7 +58,7 @@ as a finding beneath it rather than by moving the criterion.
 ### T12 — the twelve entries
 
 **The reference.** Each entry's `entry.properties` carries a `motion=` line. It was measured on the
-**full uncropped frame, binned, on the best-ranked plane**, over every consecutive pair. The entry
+**full uncropped frame, binned, on the top-ranked plane**, over every consecutive pair. The entry
 beside it is an **unbinned crop of channel 1**. Those are different pixels at a different scale, so
 strict agreement with that line measures the crop rather than the plugin. It is therefore **reported
 in every row and is not the pass condition**.

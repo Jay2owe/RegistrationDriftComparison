@@ -52,6 +52,7 @@ references:
     version: "0.1.0"
     year: 2026
     license: BSD-3-Clause
+    repository-code: "https://github.com/Jay2owe/autofix-core"
     notes: "Dependency detection and repair module, compiled into Registration & Drift Comparison 0.1.0."
     authors:
       - given-names: Jamie

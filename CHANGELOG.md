@@ -4,9 +4,9 @@ All notable changes to Registration & Drift Comparison are documented here. The
 format follows [Keep a Changelog](https://keepachangelog.com/) and this project
 adheres to [Semantic Versioning](https://semver.org/).
 
-## [0.1.0] - 2026-08-14
+## [0.1.0] - Unreleased
 
-First release. One jar, no prerequisites, two menu entries under
+First release. One jar, no prerequisites, three menu entries under
 **Plugins ▸ Registration**. It ships no registration engine of its own: every
 engine it can run belongs to another plugin and is detected at run time.
 
@@ -37,6 +37,10 @@ engine it can run belongs to another plugin and is detected at run time.
   research repository on 2026-08-13 and never edited. A later benchmark run
   becomes a new file beside these, with its own date and a line in this
   changelog.
+- Golden outputs for all five modes over five fixed recordings, checked on every
+  build, and a synthetic benchmark (`-Dregdrift.bench=true`) that times each
+  mode and fails if two repeats disagree, so a later change that moves any
+  number or any timing is seen.
 
 ### Fixed before release
 
@@ -173,8 +177,8 @@ Stated in full at the top of the README, and at length in `VALIDATION.md`.
 
 ### Not done, and deliberately
 
-No GitHub release, no archived DOI, no ImageJ update site and no entry in Fiji's
-central list of update sites. Those are separate, outward, irreversible steps and
-none of them is a statement about this source tree. See `PUBLISHING_AUDIT.md`.
+No archived DOI. The jar is attached to the GitHub release; the ImageJ update
+site `Registration-Drift-Comparison` and its entry in Fiji's central list of
+update sites follow as separate steps.
 
-[0.1.0]: https://github.com/Jay2owe/RegistrationDriftComparison
+[0.1.0]: https://github.com/Jay2owe/RegistrationDriftComparison/releases/tag/v0.1.0

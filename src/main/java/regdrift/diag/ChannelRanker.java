@@ -248,7 +248,7 @@ public final class ChannelRanker {
         // The number and its scale, and nothing more. This sentence used to add "it is still below
         // the warning threshold, so expect any method to struggle on this recording", which is the
         // claim stage 09 measured and withdrew: at every scale tried, that threshold either warns
-        // on recordings that register well - it warns on the four best in the library - or misses
+        // on recordings that register well - it warns on the four cleanest in the library - or misses
         // recordings that do not. See defect D12 and docs/D12_MEASUREMENT.md. The ranking still
         // orders channels by this number, which is a comparison within one recording and needs no
         // threshold; what it no longer does is tell anybody what the number means.

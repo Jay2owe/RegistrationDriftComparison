@@ -6,7 +6,7 @@ measurement tables are the evidence and do not need repeating.
 
 Defect D12: `Localisability.WARN_BELOW = 0.05` was calibrated on the motion survey's *binned*
 frames, where the usable band measured 0.086–0.284. Applied to the twelve library entries at native
-resolution it fires on eleven of twelve, including the four entries that register best, and reads
+resolution it fires on eleven of twelve, including the four entries that register most cleanly, and reads
 negative on two. Localisability is the fall in frame-to-frame correlation caused by displacing one
 frame a single pixel, so "one pixel" has to mean the same thing in the calibration and in the
 measurement, and at native resolution it does not.
@@ -58,7 +58,7 @@ frame pair in the entry.
 
 The reference the scale has to reproduce is `library/RESULTS.md`, which is the reduction in temporal
 standard deviation each entry actually achieved when it was registered, measured against an
-interpolation-matched control. The four best are `04_drift` (−50.6%), `06_knock` (−40.3%),
+interpolation-matched control. The four most cleanly registered are `04_drift` (−50.6%), `06_knock` (−40.3%),
 `02_jitter` (−37.5%) and `07_knock_drift` (−37.1%). The two `t4/RESULT.md` calls correctly hopeless
 are `10_unresolved_methods_disagree` (+0.7%) and `11_unresolved_moving_artefact` (−2.1%).
 
@@ -112,15 +112,15 @@ The survey ran at bin 4, and that is now the scale the fingerprint measures at. 
 library to bin 4 does not rescue `WARN_BELOW = 0.05`. At bin 4 the shipped threshold still fires on
 `04_drift` (+0.0380, **−50.6%** SD against control — the largest reduction in the library),
 `06_knock` (+0.0439, −40.3%) and `07_knock_drift` (+0.0407, −37.1%): three of the four
-best-registering entries, warned as poorly localisable.
+most cleanly registering entries, warned as poorly localisable.
 
 ### No threshold at any measured scale separates the library
 
-Taking the four entries the library registers best — `02_jitter`, `04_drift`, `06_knock`,
+Taking the four entries the library registers most cleanly — `02_jitter`, `04_drift`, `06_knock`,
 `07_knock_drift` — against the two `t4\RESULT.md` calls hopeless, `10_unresolved_methods_disagree`
 (+0.7%) and `11_unresolved_moving_artefact` (−2.1%):
 
-| scale | lowest of the four best | highest of the two hopeless | is there a cut between them? |
+| scale | lowest of the four clean ones | highest of the two hopeless | is there a cut between them? |
 |---|---|---|---|
 | bin 1 | −0.0246 | +0.0081 | no |
 | bin 2 | +0.0215 | +0.0468 | no |
@@ -158,7 +158,7 @@ catch.
 `11` is therefore excluded from the reasoning above as a diagnosis of localisability. **The
 conclusion does not depend on it**: `01` (−12.1%), `05` (−5.3%) and `12` (−0.2%) sit above
 `04_drift` (−50.6%) at bin 4 on their own, and at bin 1 the entry with the *lowest* localisability
-in the library, `02_jitter` at −0.0246, is one of the four that register best.
+in the library, `02_jitter` at −0.0246, is one of the four that register most cleanly.
 
 ### What is shipped instead
 

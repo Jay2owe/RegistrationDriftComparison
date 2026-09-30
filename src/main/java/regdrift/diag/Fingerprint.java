@@ -60,7 +60,7 @@ import java.util.TreeMap;
  * <p><b>Fixing the scale did not rescue the threshold, and D12 is carried
  * open.</b> Measured at bin 4 on the twelve library recordings, the shipped
  * {@link Localisability#WARN_BELOW} still warns on three of the four entries
- * that register best, and no cut at bin 1, 2, 4 or 8 separates the recordings
+ * that register most cleanly, and no cut at bin 1, 2, 4 or 8 separates the recordings
  * that register from the recordings that do not. So this class reports
  * localisability with its scale and {@link Verdict} does not threshold it. The
  * evidence, and what would be needed to close D12, are in
@@ -465,7 +465,7 @@ public final class Fingerprint {
      *
      * <p><b>Reported, never routed on.</b> It ranks the library almost inversely
      * to the outcome: it reads 0.163 and 0.198 on two of the entries that
-     * register best and 0.88-0.89 on three that do not.
+     * register most cleanly and 0.88-0.89 on three that do not.
      */
     public double frameCorrelation() {
         return frameCorrelation;

@@ -33,7 +33,7 @@ import java.util.Locale;
  *
  * <p>It does <b>not</b> route on frame correlation. That measure fires on
  * {@code 02_jitter} (0.163) and {@code 03_jitter_drift} (0.198), two of the
- * entries that register best, while {@code 08}, {@code 09} and {@code 10} sit at
+ * entries that register most cleanly, while {@code 08}, {@code 09} and {@code 10} sit at
  * 0.88-0.89. It ranks the library almost inversely, and it is reported in the
  * table and routed on nowhere.
  *
