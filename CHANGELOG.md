@@ -4,6 +4,35 @@ All notable changes to Registration & Drift Comparison are documented here. The
 format follows [Keep a Changelog](https://keepachangelog.com/) and this project
 adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **Slow drift is read at its true size (defects B8 and B9).** Phase
+  correlation's sub-pixel step no longer puts a parabola through three samples
+  of the peak, which pulled every reading toward a whole pixel. It now reads the
+  correlation surface between samples from the spectrum (upsampled-DFT
+  refinement), with a Gaussian weight on the spectrum that corrects the short
+  reading a pixel's own area gives a fractional shift. The whole-pixel peak is
+  still found without the weight, so the two estimators still fail
+  independently. On synthetic recordings of known drift, `drift_rate_px` now
+  reads 98–101% of 0.2–4 px per frame at bin 1, 2 and 4 (0.1.0: 43–57% at bin 4
+  below 2 px per frame), and Compare mode scores both StackReg arms on steady
+  drift of 0.36–1.8 px per frame, where 0.1.0 gave no ranking.
+
+### Changed
+
+- **The golden outputs were regenerated for that fix.** What moved, on the five
+  golden fixtures: `drift_rate_px` (for example 0.33 → 0.73 on
+  `knock_256x48`, true 0.71), `step_max_px`, `step_rms_px`, `wander`,
+  `agreement_px`, `bridge_max_px`, and the Comparison table's `net_px`,
+  `path_px`, residual figures and `sd_vs_control` (by at most 0.011). One word
+  moved: `knock_256x48`'s severity, `severe` → `extreme`. Localisability, the
+  motion label, the verdict and the whole Recommendation table did not move.
+- **Not yet re-validated against the twelve library recordings.** The
+  thresholds in `VALIDATION.md` were measured with 0.1.0's reading; re-running
+  it needs the library, which is not on this machine.
+
 ## [0.1.0] - 2026-09-30
 
 First release. One jar, no prerequisites, three menu entries under
