@@ -243,6 +243,105 @@ public class PhaseCorrelationTest {
         }
     }
 
+    /**
+     * The tabled rotation factors and the blocked column pass were a speed change and nothing else:
+     * the 2-D transform must give, bit for bit, what the transform before them gave. The reference
+     * below is that earlier code, kept verbatim.
+     */
+    @Test
+    public void fasterTransformIsBitForBitTheEarlierOne() {
+        Random random = new Random(20260930L);
+        for (int n : new int[]{1, 2, 8, 16, 32, 128}) {
+            for (boolean inverse : new boolean[]{false, true}) {
+                double[] re = new double[n * n];
+                double[] im = new double[n * n];
+                for (int i = 0; i < re.length; i++) {
+                    re[i] = random.nextGaussian() * 100;
+                    im[i] = inverse ? random.nextGaussian() : 0;
+                }
+                double[] expectRe = re.clone();
+                double[] expectIm = im.clone();
+                earlierFft2(expectRe, expectIm, n, inverse);
+                PhaseCorrelation.fft2(re, im, n, inverse);
+                for (int i = 0; i < re.length; i++) {
+                    String where = "n=" + n + " inverse=" + inverse + " at " + i;
+                    assertEquals(where, Double.doubleToRawLongBits(expectRe[i]),
+                            Double.doubleToRawLongBits(re[i]));
+                    assertEquals(where, Double.doubleToRawLongBits(expectIm[i]),
+                            Double.doubleToRawLongBits(im[i]));
+                }
+            }
+        }
+    }
+
+    private static void earlierFft2(double[] re, double[] im, int n, boolean inverse) {
+        double[] tr = new double[n];
+        double[] ti = new double[n];
+        for (int y = 0; y < n; y++) {
+            System.arraycopy(re, y * n, tr, 0, n);
+            System.arraycopy(im, y * n, ti, 0, n);
+            earlierFft(tr, ti, inverse);
+            System.arraycopy(tr, 0, re, y * n, n);
+            System.arraycopy(ti, 0, im, y * n, n);
+        }
+        for (int x = 0; x < n; x++) {
+            for (int y = 0; y < n; y++) {
+                tr[y] = re[y * n + x];
+                ti[y] = im[y * n + x];
+            }
+            earlierFft(tr, ti, inverse);
+            for (int y = 0; y < n; y++) {
+                re[y * n + x] = tr[y];
+                im[y * n + x] = ti[y];
+            }
+        }
+    }
+
+    private static void earlierFft(double[] re, double[] im, boolean inverse) {
+        int n = re.length;
+        for (int i = 1, j = 0; i < n; i++) {
+            int bit = n >> 1;
+            for (; (j & bit) != 0; bit >>= 1) j ^= bit;
+            j ^= bit;
+            if (i < j) {
+                double t = re[i];
+                re[i] = re[j];
+                re[j] = t;
+                t = im[i];
+                im[i] = im[j];
+                im[j] = t;
+            }
+        }
+        for (int len = 2; len <= n; len <<= 1) {
+            double ang = 2 * Math.PI / len * (inverse ? 1 : -1);
+            double wr = Math.cos(ang);
+            double wi = Math.sin(ang);
+            for (int i = 0; i < n; i += len) {
+                double cr = 1;
+                double ci = 0;
+                for (int k = 0; k < len / 2; k++) {
+                    int u = i + k;
+                    int v = i + k + len / 2;
+                    double vr = re[v] * cr - im[v] * ci;
+                    double vi = re[v] * ci + im[v] * cr;
+                    re[v] = re[u] - vr;
+                    im[v] = im[u] - vi;
+                    re[u] += vr;
+                    im[u] += vi;
+                    double nr = cr * wr - ci * wi;
+                    ci = cr * wi + ci * wr;
+                    cr = nr;
+                }
+            }
+        }
+        if (inverse) {
+            for (int i = 0; i < n; i++) {
+                re[i] /= n;
+                im[i] /= n;
+            }
+        }
+    }
+
     @Test
     public void nextPowerOfTwoIsExactAtPowersOfTwo() {
         assertEquals(64, PhaseCorrelation.nextPowerOfTwo(64));

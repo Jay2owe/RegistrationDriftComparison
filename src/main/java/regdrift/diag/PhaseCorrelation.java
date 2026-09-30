@@ -156,11 +156,16 @@ public final class PhaseCorrelation implements Estimator {
         // one included, is zero once the mean is subtracted. There is no phase to match, so the
         // honest answer is the identity with a reason on it rather than whichever bin of an
         // all-zero surface happens to be scanned first. Defect D8.
-        if (peakAmplitude(a) <= 0 || peakAmplitude(b) <= 0) {
+        // Each amplitude is taken once here and handed on: correlate needs the same two figures
+        // for its spectral floor, and on a 512 x 512 frame each one is a quarter of a million
+        // square roots.
+        double amplitudeA = peakAmplitude(a);
+        double amplitudeB = peakAmplitude(b);
+        if (amplitudeA <= 0 || amplitudeB <= 0) {
             return Displacement.identity(Status.NO_STRUCTURE, bin);
         }
 
-        double[] peak = correlate(a, b, n, true);
+        double[] peak = correlate(a, b, n, true, amplitudeA, amplitudeB);
         double magnitude = Math.hypot(peak[0], peak[1]);
         if (magnitude > maxShift) {
             // Reported on the bound, not truncated quietly. The direction is what the pixels said;
@@ -185,7 +190,9 @@ public final class PhaseCorrelation implements Estimator {
      */
     static double[] peak(float[] a, float[] b, int width, int height, boolean normalise) {
         int n = transformSize(width, height);
-        return correlate(transform(a, width, height), transform(b, width, height), n, normalise);
+        double[][] fa = transform(a, width, height);
+        double[][] fb = transform(b, width, height);
+        return correlate(fa, fb, n, normalise, peakAmplitude(fa), peakAmplitude(fb));
     }
 
     /** The correlation peak with the phase normalisation on, which is the method proper. */
@@ -195,7 +202,8 @@ public final class PhaseCorrelation implements Estimator {
 
     // ------------------------------------------------------------ the method
 
-    private static double[] correlate(double[][] a, double[][] b, int n, boolean normalise) {
+    private static double[] correlate(double[][] a, double[][] b, int n, boolean normalise,
+                                      double amplitudeA, double amplitudeB) {
         double[] ar = a[RE];
         double[] ai = a[IM];
         double[] br = b[RE].clone();
@@ -208,8 +216,8 @@ public final class PhaseCorrelation implements Estimator {
         //
         // Each spectrum is thresholded against its OWN peak before that, so a frequency neither
         // image actually has is dropped rather than promoted to full weight.
-        double floorA = SPECTRAL_FLOOR * peakAmplitude(a);
-        double floorB = SPECTRAL_FLOOR * peakAmplitude(b);
+        double floorA = SPECTRAL_FLOOR * amplitudeA;
+        double floorB = SPECTRAL_FLOOR * amplitudeB;
         for (int i = 0; i < ar.length; i++) {
             if (normalise && (Math.hypot(ar[i], ai[i]) < floorA
                     || Math.hypot(br[i], bi[i]) < floorB)) {
@@ -343,33 +351,89 @@ public final class PhaseCorrelation implements Estimator {
         return p;
     }
 
+    /**
+     * Columns copied out together in the column pass: a block of neighbouring
+     * columns is read row by row, so each cache line fetched is used whole rather
+     * than for one value. Every column still goes through {@link #fft} alone, so
+     * the arithmetic, and every bit of the result, is what one column at a time
+     * gave.
+     */
+    private static final int COLUMN_BLOCK = 16;
+
     /** In-place 2-D transform of a square {@code n x n} array stored row-major. */
     static void fft2(double[] re, double[] im, int n, boolean inverse) {
+        double[][] twiddles = twiddles(n, inverse);
         double[] tr = new double[n];
         double[] ti = new double[n];
         for (int y = 0; y < n; y++) {
             System.arraycopy(re, y * n, tr, 0, n);
             System.arraycopy(im, y * n, ti, 0, n);
-            fft(tr, ti, inverse);
+            fft(tr, ti, inverse, twiddles);
             System.arraycopy(tr, 0, re, y * n, n);
             System.arraycopy(ti, 0, im, y * n, n);
         }
-        for (int x = 0; x < n; x++) {
+        int block = Math.min(COLUMN_BLOCK, n);
+        double[][] cr = new double[block][n];
+        double[][] ci = new double[block][n];
+        for (int x0 = 0; x0 < n; x0 += block) {
             for (int y = 0; y < n; y++) {
-                tr[y] = re[y * n + x];
-                ti[y] = im[y * n + x];
+                int row = y * n + x0;
+                for (int c = 0; c < block; c++) {
+                    cr[c][y] = re[row + c];
+                    ci[c][y] = im[row + c];
+                }
             }
-            fft(tr, ti, inverse);
+            for (int c = 0; c < block; c++) fft(cr[c], ci[c], inverse, twiddles);
             for (int y = 0; y < n; y++) {
-                re[y * n + x] = tr[y];
-                im[y * n + x] = ti[y];
+                int row = y * n + x0;
+                for (int c = 0; c < block; c++) {
+                    re[row + c] = cr[c][y];
+                    im[row + c] = ci[c][y];
+                }
             }
         }
     }
 
     /** In-place iterative radix-2 Cooley-Tukey. {@code re.length} must be a power of two. */
     static void fft(double[] re, double[] im, boolean inverse) {
+        fft(re, im, inverse, twiddles(re.length, inverse));
+    }
+
+    /**
+     * The rotation factors every butterfly of a length-{@code n} transform uses:
+     * for the stage of span {@code len}, factor {@code k} sits at
+     * {@code len / 2 + k}.
+     *
+     * <p>Built by the same recurrence, in the same order, that the butterfly loop
+     * used to run inline and restart for every block of a stage, so each factor
+     * is bit for bit the value it was. Taking them from a table instead saves
+     * that recomputation, which was two fifths of the multiplications.
+     */
+    static double[][] twiddles(int n, boolean inverse) {
+        double[] tr = new double[Math.max(1, n)];
+        double[] ti = new double[Math.max(1, n)];
+        for (int len = 2; len <= n; len <<= 1) {
+            double ang = 2 * Math.PI / len * (inverse ? 1 : -1);
+            double wr = Math.cos(ang);
+            double wi = Math.sin(ang);
+            int half = len / 2;
+            double cr = 1;
+            double ci = 0;
+            for (int k = 0; k < half; k++) {
+                tr[half + k] = cr;
+                ti[half + k] = ci;
+                double nr = cr * wr - ci * wi;
+                ci = cr * wi + ci * wr;
+                cr = nr;
+            }
+        }
+        return new double[][]{tr, ti};
+    }
+
+    private static void fft(double[] re, double[] im, boolean inverse, double[][] twiddles) {
         int n = re.length;
+        double[] twr = twiddles[RE];
+        double[] twi = twiddles[IM];
         for (int i = 1, j = 0; i < n; i++) {
             int bit = n >> 1;
             for (; (j & bit) != 0; bit >>= 1) j ^= bit;
@@ -384,24 +448,19 @@ public final class PhaseCorrelation implements Estimator {
             }
         }
         for (int len = 2; len <= n; len <<= 1) {
-            double ang = 2 * Math.PI / len * (inverse ? 1 : -1);
-            double wr = Math.cos(ang);
-            double wi = Math.sin(ang);
+            int half = len / 2;
             for (int i = 0; i < n; i += len) {
-                double cr = 1;
-                double ci = 0;
-                for (int k = 0; k < len / 2; k++) {
+                for (int k = 0; k < half; k++) {
+                    double cr = twr[half + k];
+                    double ci = twi[half + k];
                     int u = i + k;
-                    int v = i + k + len / 2;
+                    int v = u + half;
                     double vr = re[v] * cr - im[v] * ci;
                     double vi = re[v] * ci + im[v] * cr;
                     re[v] = re[u] - vr;
                     im[v] = im[u] - vi;
                     re[u] += vr;
                     im[u] += vi;
-                    double nr = cr * wr - ci * wi;
-                    ci = cr * wi + ci * wr;
-                    cr = nr;
                 }
             }
         }

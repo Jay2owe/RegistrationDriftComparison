@@ -67,6 +67,12 @@ public final class DispatchEstimate {
      *
      * <p>Both the shared-movement pass and each arm's transform recovery cost one
      * of these.
+     *
+     * <p>Measured before the transform was made faster for 0.1.0, which cut the
+     * processor time of a comparison's own work by about a quarter with every
+     * output unchanged (see {@code CHANGELOG.md}). Left as measured rather than
+     * scaled by a guess: it now overstates, which errs toward warning, and the
+     * engine term below is the larger part of any estimate.
      */
     public static final double ESTIMATOR_SECONDS_PER_PADDED_MEGAPIXEL_FRAME = 0.72;
 

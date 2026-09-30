@@ -81,6 +81,16 @@ engine it can run belongs to another plugin and is detected at run time.
   sat behind a scroll bar. The dialog now resizes to fit, up to its cap of 80%
   of the screen's height.
 
+### Faster, with every output unchanged
+
+- The phase-correlation transform, where a comparison spends most of its own
+  time, now reads its rotation factors from a table and copies columns out in
+  blocks, and each spectrum's peak amplitude is taken once per pair rather than
+  twice. Measured back to back on synthetic recordings: processor time down 24%
+  for compare and score on 512 x 512 x 48, and 17-20% for a diagnosis. Outputs
+  unchanged: every table and registered pixel hashes the same, and the transform
+  is tested bit for bit against the earlier code.
+
 ### Measured, and shipped as measured
 
 Every figure below is in `VALIDATION.md`, with the machine, the date, the plugin
