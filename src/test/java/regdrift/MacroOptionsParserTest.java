@@ -265,16 +265,12 @@ public class MacroOptionsParserTest {
     }
 
     @Test
-    public void aBackslashInAPathIsRefusedWithSomethingActionableToDo() {
-        try {
-            RegDriftMacroOptionsParser.parse("save_root=[C:\\out]");
-            fail("a backslash should be refused");
-        } catch (IllegalArgumentException expected) {
-            String message = expected.getMessage();
-            assertTrue(message, message.contains("save_root"));
-            assertTrue("the message should say what to do instead: " + message,
-                    message.toLowerCase(Locale.ROOT).contains("forward slash"));
-        }
+    public void aBackslashInAPathBecomesAForwardSlash() {
+        // A Windows path, as the dialog's folder browser fills it in. Refusing it stopped the
+        // dialog running; turning it round keeps a recorded macro line free of the backslash a
+        // macro string would read as an escape.
+        assertEquals("C:/out/run 1", RegDriftMacroOptionsParser.parse("save_root=[C:\\out\\run 1]")
+                .getSaveRoot());
     }
 
     @Test

@@ -46,6 +46,24 @@ engine it can run belongs to another plugin and is detected at run time.
   slashes on the way in. This changed the saved-tree digests in
   `src/test/resources/golden/modes.tsv` and nothing else: every table, verdict
   and registered-pixel digest is unchanged.
+- `use_roi` was accepted and then ignored. It now measures the movement inside
+  the rectangle enclosing the selection, refuses a missing selection or one under
+  16 x 16 pixels in words, and says in the channel reason what was measured.
+- One infinite pixel anywhere in a 32-bit recording left the drift rate blank.
+  Infinite pixels are now treated as unmeasured, as missing (NaN) pixels already
+  were.
+- A blank or all-missing frame roughly halved the reported drift rate (0.43
+  instead of 0.76 pixels per frame on a test recording), because the frame pair
+  it could not measure was counted as no movement. It now carries the window's
+  mean measured step across the gap (0.69).
+- RGB recordings were measured on the red channel alone. They are now measured
+  on the unweighted mean of red, green and blue.
+- Comparing a still or featureless recording failed with a message about
+  interpolation paths. It now says the recording's own movement measured as
+  whole pixels or none, so there is no control, and that no engine was driven.
+- A window closed before the run was reported as holding one frame. It now says
+  the image has no pixels left to read.
+- An engine wait under one second was reported as "within 0 s".
 
 ### Measured, and shipped as measured
 
@@ -90,6 +108,10 @@ Stated in full at the top of the README, and at length in `VALIDATION.md`.
   finished, letting an arm drive with the switch off, and making a recording
   unfindable by title.
 - The fingerprint measures **whole-field translation, and nothing else**.
+- **Slow drift on a frame 256 pixels or more a side is under-read.** Measured at
+  bin 3-4, `drift_rate_px` read 0.39 for a true 0.84 and 1.01 for a true 1.68
+  pixels per frame on synthetic recordings; 3.3 pixels per frame and faster read
+  within 8%, and everything at bin 1 within 4%. Deferred to 0.2.0 below.
 - On a recording that moves very little, the shared region every arm is scored
   over is narrow, so a comparison is **most likely to say nothing on exactly the
   recordings that move least**.
@@ -107,6 +129,11 @@ Stated in full at the top of the README, and at length in `VALIDATION.md`.
   sample the old `WARN_BELOW = 0.05` was over-fitted to, and on them no cut at
   bin 1, 2, 4 or 8 separates the recordings that register from the ones that do
   not. Evidence: `docs/D12_MEASUREMENT.md`.
+- **An unbiased sub-pixel peak fit for phase correlation.** The parabola through
+  the correlation peak reads a shift of a fraction of a pixel short, which on a
+  binned frame is every drift slower than about 2 native pixels per frame. The
+  fix changes the measurement the bundled calibration was taken with, so it ships
+  with a re-measured calibration rather than alone.
 - **`DOMINANCE_MARGIN` and `WANDER_WALK`**, measured wrong and shipped unchanged
   (see `VALIDATION.md`), are re-measured against the same cross-instrument set,
   and widened or withdrawn the way the `PERIODIC` label and the knock count were

@@ -12,6 +12,7 @@ import regdrift.Arbiter;
 import regdrift.Channel;
 import regdrift.EngineSelection;
 import regdrift.Mode;
+import regdrift.RegDrift;
 import regdrift.RegDriftMacroOptions;
 import regdrift.Slice;
 import regdrift.WindowFrames;
@@ -345,8 +346,10 @@ public abstract class RegDriftDialog {
                 + " drift through focus while the field itself sits still.");
 
         roiToggle = form.addToggle("Restrict to the ROI on the recording", false);
-        form.addHelpText("When the recording carries an ROI, restricts which pixels vote. For"
-                + " measuring on a static background while a large object crosses the field.");
+        form.addHelpText("Measures the movement inside the rectangle enclosing the selection on"
+                + " the recording, at least " + RegDrift.MIN_ROI_SIDE_PX + " pixels a side. For"
+                + " measuring on a static background while a large object crosses the field."
+                + " Engines and scoring still use the whole frame.");
 
         imageCombo.addActionListener(event -> imageChanged());
     }

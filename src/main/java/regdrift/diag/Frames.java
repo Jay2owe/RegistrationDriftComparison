@@ -282,8 +282,35 @@ public final class Frames implements FrameSource {
      */
     private float[] floats(int stackIndex) {
         ImageProcessor ip = stack.getProcessor(stackIndex);
+        if (ip instanceof ij.process.ColorProcessor) return brightness((int[]) ip.getPixels());
         float[] p = (float[]) ip.toFloat(0, null).getPixels();
-        return ip instanceof ij.process.FloatProcessor ? p.clone() : p;
+        if (!(ip instanceof ij.process.FloatProcessor)) return p;
+        p = p.clone();
+        // An infinite pixel is no measurement, the same as NaN, and is marked that way so every
+        // stage below leaves it out. Left in, one of them turns a block mean, a correlation and an
+        // FFT into NaN, and the whole pair is lost to one pixel.
+        for (int i = 0; i < p.length; i++) {
+            if (Float.isInfinite(p[i])) p[i] = Float.NaN;
+        }
+        return p;
+    }
+
+    /**
+     * An RGB plane as the plain mean of its three channels.
+     *
+     * <p>ImageJ's own float conversion of an RGB plane takes the red channel
+     * alone, which measures whatever is red and ignores the rest; and its
+     * weighted conversion follows a user preference, so the same recording would
+     * measure differently on two computers. The unweighted mean depends on
+     * nothing but the pixels.
+     */
+    public static float[] brightness(int[] rgb) {
+        float[] out = new float[rgb.length];
+        for (int i = 0; i < rgb.length; i++) {
+            int c = rgb[i];
+            out[i] = (((c >> 16) & 0xff) + ((c >> 8) & 0xff) + (c & 0xff)) / 3f;
+        }
+        return out;
     }
 
     // ------------------------------------------------------------ the scale

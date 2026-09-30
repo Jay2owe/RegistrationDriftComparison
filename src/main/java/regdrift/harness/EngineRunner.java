@@ -734,11 +734,17 @@ public final class EngineRunner {
         return EngineDescriptor.forEngine(engine).displayName();
     }
 
+    /** A wait as a person reads it: whole seconds when it is whole, else one decimal. */
+    static String seconds(long millis) {
+        if (millis % 1000L == 0L) return (millis / 1000L) + " s";
+        return String.format(java.util.Locale.ROOT, "%.1f s", millis / 1000.0);
+    }
+
     private static String timedOutDetail(EngineDescriptor engine, long timeoutMillis,
                                          List<String> leftBehind) {
         StringBuilder said = new StringBuilder(engine.displayName())
-                .append(" did not come back within ").append(timeoutMillis / 1000L)
-                .append(" s, so this run stopped waiting for it. It was not stopped and it was not")
+                .append(" did not come back within ").append(seconds(timeoutMillis))
+                .append(", so this run stopped waiting for it. It was not stopped and it was not")
                 .append(" interrupted - stopping a thread from outside drops whatever it was")
                 .append(" holding half-written. ");
         said.append(leftBehind.size()).append(leftBehind.size() == 1 ? " thread is" : " threads are")

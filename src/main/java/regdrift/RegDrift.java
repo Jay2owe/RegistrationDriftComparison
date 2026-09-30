@@ -231,6 +231,11 @@ public final class RegDrift {
      */
     private static Failure checkRunnable(RegDriftParameters parameters) {
         ImagePlus image = parameters.image();
+        if (image.getProcessor() == null) {
+            return Failure.of(Failure.Kind.IMAGE_UNREADABLE, "'" + image.getTitle() + "' has no"
+                    + " pixels left to read, which is what a window that has already been closed"
+                    + " leaves behind. Open the recording again and run on that.");
+        }
         int frames = frameCount(image);
         if (frames < MIN_FRAMES) {
             return Failure.of(Failure.Kind.NO_TIME_AXIS, "'" + image.getTitle() + "' holds "
@@ -299,12 +304,9 @@ public final class RegDrift {
      * channel is then re-measured over the pairs the fingerprint actually used,
      * which is the number the verdict quotes.
      *
-     * <p><b>Not yet acted on here:</b> {@link RegDriftParameters#useRoi()}. An
-     * ROI restricting which pixels vote needs {@link Frames} to carry one, and
-     * {@code Frames} does not; the setting is carried through the request and
-     * the record and changes nothing about the measurement. Stated rather than
-     * left to be discovered from a diagnosis that quietly measured the whole
-     * frame.
+     * <p>With {@link RegDriftParameters#useRoi()} set, the movement is measured
+     * inside the bounding rectangle of the selection on the recording - see
+     * {@link Selection#measuredImage}.
      */
     private static RegDriftResult diagnose(RegDriftParameters parameters) {
         Measured measured = null;
@@ -351,10 +353,20 @@ public final class RegDrift {
      * {@link Measured#release()} in a {@code finally}.
      */
     private static Measured measure(RegDriftParameters parameters) {
-        ImagePlus image = parameters.image();
         Cancellation cancellation = parameters.cancellation();
         int workers = parameters.serial() ? 1 : 0;
         Measured measured = new Measured();
+        ImagePlus image = parameters.image();
+        if (parameters.useRoi()) {
+            Object cropped = Selection.measuredImage(image);
+            if (cropped instanceof Failure) {
+                measured.refusal = (Failure) cropped;
+                return measured;
+            }
+            image = (ImagePlus) cropped;
+            measured.cropped = image;
+            measured.roiNote = String.valueOf(image.getProperty(Selection.NOTE_PROPERTY));
+        }
         measured.bin = Fingerprint.binFor(image.getWidth(), image.getHeight());
 
         measured.ranking = ChannelRanker.rank(image, measured.bin, 0, workers,
@@ -368,6 +380,9 @@ public final class RegDrift {
                         + " applied.";
         measured.slice = parameters.slice().isProject()
                 ? Frames.PROJECT_Z : parameters.slice().index();
+        if (measured.cropped != null) {
+            measured.channelReason = measured.channelReason + " " + measured.roiNote;
+        }
 
         try {
             measured.frames = Frames.of(image, measured.channel, measured.slice, measured.bin);
@@ -398,6 +413,9 @@ public final class RegDrift {
         private Fingerprint fingerprint;
         private regdrift.diag.Verdict verdict;
         private Failure refusal;
+        /** The selection's crop, when use_roi asked for one; this run's own copy. */
+        private ImagePlus cropped;
+        private String roiNote = "";
 
         /** The record of what was measured, before any mode adds to it. */
         Provenance.Builder record(RegDriftParameters parameters) {
@@ -413,11 +431,19 @@ public final class RegDrift {
 
         /** Lets go of the frames this opened. Doing it twice is safe. */
         void release() {
-            if (frames == null) return;
-            frames.release();
-            frames = null;
+            if (frames != null) {
+                frames.release();
+                frames = null;
+            }
+            if (cropped != null) {
+                cropped.flush();
+                cropped = null;
+            }
         }
     }
+
+    /** The smallest selection, in image pixels a side, that {@code use_roi} measures inside. */
+    public static final int MIN_ROI_SIDE_PX = 16;
 
     /** One row per candidate engine, in the order the ranking put them. */
     private static ResultsTable recommendationTable(Recommender.Result advice) {
@@ -713,8 +739,12 @@ public final class RegDrift {
                         ControlWarp.fractionalOf(controlTransforms), resampling);
             } catch (IllegalArgumentException noControl) {
                 return RegDriftResult.failed(parameters, Failure.of(Failure.Kind.SCORING_FAILED,
-                        "'" + image.getTitle() + "' cannot be compared: " + noControl.getMessage()
-                                + " No engine was driven."));
+                        "'" + image.getTitle() + "' cannot be compared: its own movement measured"
+                                + " as whole pixels or none at all, which is what a still or"
+                                + " featureless recording gives, so there is no control to score"
+                                + " the engines against. No engine was driven. Run mode '"
+                                + Mode.DIAGNOSE.macroValue() + "' to see what was measured. ("
+                                + noControl.getMessage() + ")"));
             }
             int width = raw.width();
             int height = raw.height();

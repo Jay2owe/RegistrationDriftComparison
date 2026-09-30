@@ -568,18 +568,31 @@ public final class MotionDescriptors {
                 boolean[] stepMeasured = new boolean[k];
                 int measuredHere = 0;
                 int first = plan.firstPairOfWindow(window);
+                double meanDx = 0;
+                double meanDy = 0;
                 for (int j = 1; j < k; j++) {
                     Estimator.Displacement d = perPair.get(first + j - 1);
-                    // A refused pair contributes no movement to the local trace, because there is
-                    // nothing else it could contribute, but it is kept out of the step statistics
-                    // below: counted as a measured zero it would drag the typical step down and
-                    // with it the threshold every knock is judged against.
-                    x[j] = x[j - 1] + d.dx();
-                    y[j] = y[j - 1] + d.dy();
                     stepMeasured[j] = d.defined();
-                    if (stepMeasured[j]) measuredHere++;
+                    if (!stepMeasured[j]) continue;
+                    measuredHere++;
+                    meanDx += d.dx();
+                    meanDy += d.dy();
                 }
                 if (measuredHere == 0) continue;
+                meanDx /= measuredHere;
+                meanDy /= measuredHere;
+                for (int j = 1; j < k; j++) {
+                    // A refused pair (a blank or featureless frame on either side of it) is
+                    // given the window's mean measured step rather than none. Counted as no
+                    // movement it bends the local trace flat for that step, and the drift fitted
+                    // through it comes out low - one blank frame in eight read as about half the
+                    // real drift. It stays out of the step statistics below: counted there it
+                    // would drag the typical step down, and with it the threshold every knock is
+                    // judged against. A window with every pair measured is unchanged.
+                    Estimator.Displacement d = perPair.get(first + j - 1);
+                    x[j] = x[j - 1] + (stepMeasured[j] ? d.dx() : meanDx);
+                    y[j] = y[j - 1] + (stepMeasured[j] ? d.dy() : meanDy);
+                }
 
                 double bx = slope(x);
                 double by = slope(y);

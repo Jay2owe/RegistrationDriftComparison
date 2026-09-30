@@ -135,6 +135,19 @@ Two estimators, both measuring whole-field translation. A recording whose parts 
 rotation, scaling, a stage tilt, tissue deforming — is outside what the diagnosis describes. It will
 still report numbers, and those numbers will be about the translation component.
 
+### Slow drift on a large frame is under-read
+
+A frame 256 pixels or more on its shorter side is measured binned three or four ways
+(`measured_at_bin`). At that scale a drift slower than about 2 pixels per frame is a fraction of a
+binned pixel per frame, and the phase-correlation peak fit reads a fraction of a pixel short. On
+synthetic recordings with known drift, `drift_rate_px` read **0.39 for a true 0.84** and **1.01 for
+a true 1.68** pixels per frame at bin 4; at 3.3 pixels per frame and faster it read within 8%, and at
+bin 1 within 4% at every speed tested. `severity` can land one band lower as a result. The
+recommendation does not read the drift rate. The verdict reads the gap between the two estimators,
+which this widens: it reached 0.38 pixels in those runs, against a limit of 5. A sub-pixel fit without this bias changes the
+measurement the bundled calibration was taken with, so it waits for 0.2.0 and a re-measured
+calibration.
+
 ### Batch parallelism is restricted to diagnose and recommend
 
 A folder of recordings runs several at a time in `diagnose` and `diagnose_recommend`, and **one at a
@@ -307,7 +320,7 @@ boxes happened to be ticked.
 | `mode` | `diagnose`, `diagnose_recommend`, `apply`, `compare`, `score` | `diagnose_recommend` |
 | `channel` | `auto`, or a 1-based channel number | `auto` |
 | `slice` | `project`, or a 1-based Z index | `project` |
-| `use_roi` | `true`, `false` — whether an ROI on the input restricts which pixels vote | `false` |
+| `use_roi` | `true`, `false` — measure the movement inside the rectangle enclosing the selection on the input (at least 16 × 16 pixels); engines and scoring still use the whole frame | `false` |
 | `engines` | `installed`, `all`, or a comma-separated list of engine names | `installed` |
 | `apply_engine` | An engine name, overriding the ranking. `mode=apply` accepts it; the rest refuse it | empty |
 | `windows` | `auto` (three), or a count | `auto` |
@@ -357,6 +370,9 @@ Set `save_root` and the run writes them out:
   qc/<title>_kymograph.tif
   summary.csv                               one appended line per run
 ```
+
+Running the same recording again, under the same title and `save_root`, replaces that title's
+files in the tree; `summary.csv` keeps a line for every run.
 
 A folder an older build already wrote into keeps its `summary.csv` exactly as it is and this run
 appends to `summary_2.csv`, because reordering a new line to fit an old header would drop any column
