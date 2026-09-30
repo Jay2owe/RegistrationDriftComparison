@@ -59,9 +59,8 @@ version and the run command beside it.
   to be wrong and ship anyway with the measurement in their own javadoc:
   `DOMINANCE_MARGIN = 1.5` is below the margin every one of the twelve recordings
   needs, and `WANDER_WALK = 2.5` is unreachable at the shipped window length, so
-  `MotionLabel.Component.WALK` is not produced in practice. Both are widened
-  against a cross-instrument measurement in a later version, or withdrawn the way
-  the `PERIODIC` label and the knock count were withdrawn.
+  `MotionLabel.Component.WALK` is not produced in practice. Both are deferred to
+  0.2.0; see below.
 
 ### Known limits of this release
 
@@ -73,9 +72,9 @@ Stated in full at the top of the README, and at length in `VALIDATION.md`.
 - **Correct 3D drift cannot currently be driven.** Its command is registered by
   Fiji's script framework rather than by ImageJ's plugin scan, and it reported
   `Unrecognized command` on all 36 validation arms.
-- **Localisability is reported and never thresholded** (defect D12, open): at no
-  measured scale does a cut separate the recordings that register from the ones
-  that do not.
+- **Localisability is reported and never thresholded** (defect D12, deferred to
+  0.2.0 below): at no measured scale does a cut separate the recordings that
+  register from the ones that do not.
 - **Batch parallelism is restricted to diagnose and recommend.** Concurrent
   `Interpreter.batchMode` was measured leaving batch mode on after both arms had
   finished, letting an arm drive with the switch off, and making a recording
@@ -87,6 +86,21 @@ Stated in full at the top of the README, and at length in `VALIDATION.md`.
 - Handed a multichannel hyperstack, the engines this plugin drives align plane by
   plane in stack order, so every arm is refused a figure with its reason.
   Duplicate the channel you want measured first.
+
+### Deferred to 0.2.0
+
+- **A localisability threshold (defect D12).** Localisability is reported with
+  the scale it was measured at (`measured_at_bin`) and nothing routes on it; the
+  verdict routes on agreement between the two estimators instead. A threshold
+  needs localisability measured against registration outcome across instruments
+  and modalities. The twelve single-instrument recordings available here are the
+  sample the old `WARN_BELOW = 0.05` was over-fitted to, and on them no cut at
+  bin 1, 2, 4 or 8 separates the recordings that register from the ones that do
+  not. Evidence: `docs/D12_MEASUREMENT.md`.
+- **`DOMINANCE_MARGIN` and `WANDER_WALK`**, measured wrong and shipped unchanged
+  (see `VALIDATION.md`), are re-measured against the same cross-instrument set,
+  and widened or withdrawn the way the `PERIODIC` label and the knock count were
+  withdrawn.
 
 ### Not done, and deliberately
 

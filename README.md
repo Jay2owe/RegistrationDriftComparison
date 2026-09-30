@@ -91,9 +91,11 @@ pixel — whether a one-pixel error is visible in these pixels at all. Every row
 scale it was measured at** (`measured_at_bin`), and **nothing in the verdict reads it**, because at
 no scale tested does a cut separate the recordings that register from the recordings that do not.
 Rank correlation against the reduction in temporal standard deviation, over the twelve validation
-recordings, was **+0.51, +0.50, +0.13 and −0.10 at bins 1, 2, 4 and 8**. This is defect D12 and it is
-open. The confidence signal the verdict actually routes on is agreement between the two independent
-estimators, which does order those recordings. Evidence: [`docs/D12_MEASUREMENT.md`](docs/D12_MEASUREMENT.md).
+recordings, was **+0.51, +0.50, +0.13 and −0.10 at bins 1, 2, 4 and 8**. A threshold (defect D12)
+is deferred to 0.2.0: it needs localisability measured against registration outcome across
+instruments and modalities, not twelve recordings from one. The confidence signal the verdict
+actually routes on is agreement between the two independent estimators, which does order those
+recordings. Evidence: [`docs/D12_MEASUREMENT.md`](docs/D12_MEASUREMENT.md).
 
 ### The WALK label is out of reach at the shipped window length
 
