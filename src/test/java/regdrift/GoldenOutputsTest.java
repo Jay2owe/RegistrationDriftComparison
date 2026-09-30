@@ -240,10 +240,20 @@ public class GoldenOutputsTest {
     }
 
     /** Every file of a saved tree, in path order, normalised as the javadoc says. */
-    static String tree(File tree, File root) throws IOException {
+    static String tree(final File tree, File root) throws IOException {
         List<File> files = new ArrayList<File>();
         collect(tree, files);
-        Collections.sort(files);
+        // Path order, ignoring case, on every system. File's own ordering ignores case on Windows
+        // and not on Linux, so README.txt moved among the folders and every tree digest differed
+        // on the CI runner while every table and pixel matched. This is the Windows order the
+        // goldens were written in.
+        Collections.sort(files, new java.util.Comparator<File>() {
+            @Override
+            public int compare(File a, File b) {
+                return tree.toURI().relativize(a.toURI()).getPath()
+                        .compareToIgnoreCase(tree.toURI().relativize(b.toURI()).getPath());
+            }
+        });
         StringBuilder text = new StringBuilder();
         for (File file : files) {
             String relative = tree.toURI().relativize(file.toURI()).getPath();
