@@ -44,10 +44,10 @@ jobs:
       IMAGEJ_UPDATE_SITE_NAME: "Registration-Drift-Comparison"
       FIJI_DOWNLOAD_URL: "https://downloads.imagej.net/fiji/latest/fiji-latest-linux64-jdk.zip"
       GH_TOKEN: ${{ github.token }}
-      RELEASE_TAG: "v0.1.0"
-      RELEASE_COMMIT: "55992344ecd8779ee726c4239504801f3994b22c"
-      RELEASE_SHA256: "0F0D0B68D66D58B7E5EE2AE502E9F327AAF3BD726BA7E05A90145B0EA788B020"
-      RELEASE_JAR: "RegistrationDriftComparison-0.1.0.jar"
+      RELEASE_TAG: "v0.2.0"
+      RELEASE_COMMIT: "583ccc8fccfd1282a2bd0493752342f908c1dc75"
+      RELEASE_SHA256: "BE75DBDF52BEFF2BF91EEBA7595C1E35766094FBD620CE58248C3F7CD65F53C0"
+      RELEASE_JAR: "RegistrationDriftComparison-0.2.0.jar"
       OC3D_CORE_REPO: "Jay2owe/oc3d-core"
       OC3D_CORE_REF: "v0.2.0"
       AUTOFIX_CORE_REPO: "Jay2owe/autofix-core"
@@ -78,8 +78,12 @@ jobs:
           fi
           echo "Mode: $([ "$DRY_RUN" = "true" ] && echo dry run || echo LIVE upload) to $IMAGEJ_UPDATE_SITE_URL"
 
+      # The release tag, not the branch the run was started from: main moves on to
+      # the next snapshot, and the fresh build below has to be the released source.
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
 
       - name: Check out oc3d-core
         uses: actions/checkout@v4
