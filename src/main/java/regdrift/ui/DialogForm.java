@@ -28,6 +28,7 @@ import javax.swing.JSeparator;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.SwingConstants;
+import javax.swing.SwingUtilities;
 import javax.swing.WindowConstants;
 import javax.swing.border.EmptyBorder;
 import java.awt.BorderLayout;
@@ -40,6 +41,8 @@ import java.awt.Frame;
 import java.awt.Toolkit;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
@@ -193,9 +196,25 @@ public class DialogForm {
         return pane;
     }
 
-    /** Closes the current disclosure and puts it on the form. */
+    /**
+     * Closes the current disclosure and puts it on the form.
+     *
+     * <p>The pane lays out itself, not the window, when it folds or unfolds,
+     * which leaves the dialog its old size - unfolded settings end up behind a
+     * scroll bar. Listening for its body being shown or hidden sizes the whole
+     * dialog to fit instead.
+     */
     public void endCollapsible(CollapsiblePane pane) {
         target = content;
+        pane.body().addComponentListener(new ComponentAdapter() {
+            @Override public void componentShown(ComponentEvent e) {
+                repackLater();
+            }
+
+            @Override public void componentHidden(ComponentEvent e) {
+                repackLater();
+            }
+        });
         pane.setAlignmentX(Component.LEFT_ALIGNMENT);
         content.add(pane);
         content.add(Box.createVerticalStrut(4));
@@ -455,6 +474,15 @@ public class DialogForm {
             shell.setSize(preferred.width + 30, tallest);
         }
         shell.setLocationRelativeTo(null);
+    }
+
+    /** {@link #repack()} once the change that asked for it has been laid out. */
+    private void repackLater() {
+        SwingUtilities.invokeLater(new Runnable() {
+            @Override public void run() {
+                repack();
+            }
+        });
     }
 
     /** A set of radio buttons of which exactly one is chosen. */

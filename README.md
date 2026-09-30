@@ -295,7 +295,7 @@ asks it to run an engine rather than quietly diagnosing instead.
 **Plugins ▸ Registration ▸ Compare Registration Methods…** applies one engine, compares several, or
 scores a registration you already have.
 
-Leave **Estimation channel** on **auto** unless you have a reason not to. The plugin ranks the
+Leave **Measure movement on channel** on **auto** unless you have a reason not to. The plugin ranks the
 channels itself, and picking the one that looks sharpest is often the wrong move, because on
 photon-limited recordings that channel is the noisiest.
 
@@ -311,9 +311,10 @@ photon-limited recordings that channel is the noisiest.
 
 ### Macro options
 
-Fifteen names, and they are the published grammar. Every setting is written out on a recorded line,
-including the ones left at their default, so a recorded macro says what the run did rather than which
-boxes happened to be ticked.
+Fifteen names, and they are the published grammar. A recorded line writes out every setting that has
+a value, including the ones left at their default, so a recorded macro says what the run did rather
+than which boxes happened to be ticked. The three that are empty unless set (`apply_engine`,
+`compare_with` and `save_root`) appear only when they were given.
 
 | Option | Values | Default |
 |---|---|---|

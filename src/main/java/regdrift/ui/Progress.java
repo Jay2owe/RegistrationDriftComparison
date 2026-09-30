@@ -152,6 +152,40 @@ public final class Progress {
         return stop.canceled();
     }
 
+    /**
+     * Keeps an eye on Esc for as long as a run lasts, and returns what stops it.
+     *
+     * <p>Reading Esc when the run next asks is not enough on its own. ImageJ
+     * clears the key every time a menu command starts, and a comparison starts one
+     * per engine, so Esc pressed while one engine works is gone by the time the
+     * next has started - the run would carry on to the end. A daemon thread looks
+     * every {@value #ESC_POLL_MS} ms and pulls the switch, which stays pulled.
+     * Call {@link Runnable#run()} on the returned watch when the run ends.
+     */
+    public Runnable watchEscape() {
+        final Thread watcher = new Thread(new Runnable() {
+            @Override public void run() {
+                while (!Thread.currentThread().isInterrupted() && !checkEscape()) {
+                    try {
+                        Thread.sleep(ESC_POLL_MS);
+                    } catch (InterruptedException ended) {
+                        return;
+                    }
+                }
+            }
+        }, "RegDrift Esc watch");
+        watcher.setDaemon(true);
+        watcher.start();
+        return new Runnable() {
+            @Override public void run() {
+                watcher.interrupt();
+            }
+        };
+    }
+
+    /** How often {@link #watchEscape()} looks at the keyboard. */
+    static final long ESC_POLL_MS = 50L;
+
     private void resetEscape() {
         try {
             IJ.resetEscape();

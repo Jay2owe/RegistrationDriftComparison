@@ -825,6 +825,9 @@ public final class RegDrift {
                 // long recording runs a machine out of memory.
                 if (produced != null && produced != keep) letGo(produced);
             }
+            // Scoring a finished arm notices a stop, but an arm that produced nothing is not
+            // scored, so a stop during the last one would otherwise end as a finished run.
+            if (cancellation.canceled()) return RegDriftResult.failed(parameters, stopped());
 
             List<ArmOutcome> ranked = ArmOutcome.rank(arms);
             ResultsTable comparison = RegDriftTables.comparison();

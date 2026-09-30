@@ -64,6 +64,17 @@ engine it can run belongs to another plugin and is detected at run time.
 - A window closed before the run was reported as holding one frame. It now says
   the image has no pixels left to read.
 - An engine wait under one second was reported as "within 0 s".
+- Cancel at the "Before this starts" box, or Esc during a run, opened an error
+  box that then had to be closed. A run the person stopped now ends with a line
+  in the status bar; a run with no windows still writes it to the Log.
+- Esc pressed while an engine was running was lost, because ImageJ clears the
+  key as each menu command starts and a comparison starts one per engine; the
+  comparison then ran to the end. Esc is now watched for the whole run and stops
+  it at the next engine. A stop during the last engine, when that engine
+  produced nothing, also ended as a finished run; it now ends as stopped.
+- Unfolding Advanced left the dialog its old size, so the settings it showed
+  sat behind a scroll bar. The dialog now resizes to fit, up to its cap of 80%
+  of the screen's height.
 
 ### Measured, and shipped as measured
 

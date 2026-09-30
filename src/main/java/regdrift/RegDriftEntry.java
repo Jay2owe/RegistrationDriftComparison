@@ -210,7 +210,13 @@ public abstract class RegDriftEntry implements PlugIn {
             return;
         }
         progress.step("Measuring the movement");
-        RegDriftResult result = RegDrift.run(parameters);
+        Runnable endWatch = progress.watchEscape();
+        RegDriftResult result;
+        try {
+            result = RegDrift.run(parameters);
+        } finally {
+            endWatch.run();
+        }
         if (result.isSuccess()) {
             progress.finish("Done.");
         } else {
@@ -260,11 +266,21 @@ public abstract class RegDriftEntry implements PlugIn {
      * <p>A run that gave up says so and stops there: nothing is saved and
      * nothing is shown, because there is nothing to save or show and a table
      * with no rows in it reads as a measurement of zero.
+     *
+     * <p>A run the person stopped themselves - Cancel at the cost box, or Esc -
+     * is not an error, so it ends with a line in the status bar rather than an
+     * error box they would then have to close. A run with no windows still
+     * writes it to the Log, where its macro's author will look.
      */
     protected void finish(RegDriftResult result) {
         RegDriftParameters parameters = result.parameters();
         if (!result.isSuccess()) {
-            reportFailure(result.failure().message(), parameters.hideDisplay());
+            Failure failure = result.failure();
+            if (failure.kind() == Failure.Kind.CANCELED && !parameters.hideDisplay() && canAsk()) {
+                showStatus(DISPLAY_NAME + ": " + failure.message());
+                return;
+            }
+            reportFailure(failure.message(), parameters.hideDisplay());
             return;
         }
         if (parameters.hasSaveRoot()) {

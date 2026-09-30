@@ -277,6 +277,48 @@ public class EdgeCasesTest {
         assertFalse(Interpreter.batchMode);
     }
 
+    /**
+     * Esc during an engine that then produces nothing still stops the run. Found by
+     * the GUI checks: the stop was noticed only when a finished arm was scored, so a
+     * failing last arm let the comparison end as if nobody had pressed anything.
+     */
+    @Test
+    public void stoppingDuringAnArmThatProducesNothingStillStops() {
+        final Cancellation.Flag stop = Cancellation.flag();
+        RegDrift.bench = bench(new Arm() {
+            @Override
+            public void drive(ImagePlus working) {
+                stop.cancel();
+                throw new IllegalStateException("this engine produced nothing");
+            }
+        });
+        RegDriftResult result = RegDrift.run(RegDriftParameters.builder(drift("s", 64, 8))
+                .mode(Mode.COMPARE).cancellation(stop).build());
+        assertFalse("a stopped comparison is not a finished one", result.isSuccess());
+        assertEquals(Failure.Kind.CANCELED, result.failure().kind());
+        assertFalse(Interpreter.batchMode);
+    }
+
+    /** Cancel at the cost box is the person's own choice: a status line, not an error box. */
+    @Test
+    public void cancelAtTheCostBoxEndsInTheStatusBarNotAnErrorBox() {
+        Entry shown = new Entry(new CompareRegistration_());
+        shown.asks = true;
+        shown.dispatch = Dispatch.never();
+        shown.open(drift("shown", 64, 8));
+        shown.run("mode=compare hide_display=false");
+        assertTrue("no error box: " + shown.failures, shown.failures.isEmpty());
+        assertEquals(1, shown.statuses.size());
+        assertTrue(shown.statuses.get(0), shown.statuses.get(0).contains("Nothing was driven"));
+
+        Entry hidden = new Entry(new CompareRegistration_());
+        hidden.asks = true;
+        hidden.dispatch = Dispatch.never();
+        hidden.open(drift("hidden", 64, 8));
+        hidden.run("mode=compare hide_display=true");
+        assertEquals("a run with no windows still says it in the Log", 1, hidden.failures.size());
+    }
+
     @Test
     public void anInvalidBatchPatternIsRefusedByTheBuilderInWords() throws Exception {
         try {
@@ -429,7 +471,10 @@ public class EdgeCasesTest {
         final RegDriftEntry real;
         final Map<String, ImagePlus> images = new LinkedHashMap<String, ImagePlus>();
         final List<String> failures = new ArrayList<String>();
+        final List<String> statuses = new ArrayList<String>();
         String active = "";
+        boolean asks;
+        Dispatch dispatch;
 
         Entry(RegDriftEntry real) {
             this.real = real;
@@ -446,11 +491,14 @@ public class EdgeCasesTest {
         @Override protected RegDriftDialog newDialog(ImageChoices c) { throw new AssertionError(); }
         @Override protected ImagePlus activeImage() { return images.get(active); }
         @Override protected ImagePlus imageNamed(String t) { return images.get(t); }
-        @Override protected boolean canAsk() { return false; }
+        @Override protected boolean canAsk() { return asks; }
+        @Override protected Dispatch dispatchFor(RegDriftMacroOptions o) {
+            return dispatch != null ? dispatch : super.dispatchFor(o);
+        }
         @Override protected Progress newProgress() { return Progress.silent(); }
         @Override protected void record(String s, String l) { }
         @Override protected void reportFailure(String m, boolean q) { failures.add(m); }
-        @Override protected void showStatus(String t) { }
+        @Override protected void showStatus(String t) { statuses.add(t); }
         @Override protected void display(RegDriftResult r) { }
     }
 

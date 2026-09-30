@@ -204,7 +204,7 @@ public final class DispatchEstimate {
      */
     public String text() {
         StringBuilder said = new StringBuilder();
-        said.append(String.format(Locale.US, "This comparison drives %d engine%s over %d frame%s"
+        said.append(String.format(Locale.US, "This run drives %d engine%s over %d frame%s"
                         + " of %d x %d, and is expected to cost about %s of processor time in"
                         + " total.",
                 arms.size(), arms.size() == 1 ? "" : "s", frames, frames == 1 ? "" : "s",
@@ -220,7 +220,7 @@ public final class DispatchEstimate {
                         + " minutes rather than as a number.",
                 duration(secondsPerArm())));
         said.append(" Processor time is not the time on the clock: with several workers the"
-                + " comparison finishes sooner than this, and on a busy machine it takes longer.");
+                + " run finishes sooner than this, and on a busy machine it takes longer.");
         said.append(" Engines run one after another, and stopping the run stops before the next"
                 + " engine rather than in the middle of one.");
         said.append(" Stopping here runs nothing at all.");
