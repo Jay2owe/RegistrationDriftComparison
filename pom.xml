@@ -14,7 +14,7 @@
 
 	<groupId>io.github.jay2owe</groupId>
 	<artifactId>RegistrationDriftComparison</artifactId>
-	<version>0.2.0</version>
+	<version>0.2.1-SNAPSHOT</version>
 
 	<name>Registration and Drift Comparison</name>
 	<description>Measures the movement in a time-lapse stack, says whether it can be registered, recommends a registration engine from measured benchmarks, and scores the result against an interpolation-matched control.</description>

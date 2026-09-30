@@ -76,7 +76,7 @@ public final class RegDrift {
      * {@code README.txt} and the summary file - so the version is spelled in one
      * place inside the source tree.
      */
-    public static final String VERSION = "0.2.0";
+    public static final String VERSION = "0.2.1-SNAPSHOT";
 
     /** Fewer frames than this and there is no movement to measure. */
     public static final int MIN_FRAMES = 2;

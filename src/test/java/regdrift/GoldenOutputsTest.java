@@ -78,6 +78,8 @@ import static org.junit.Assert.fail;
  * <ul>
  *   <li>{@code cpu_seconds} (Comparison table and CSV): processor time, different
  *       on every run.</li>
+ *   <li>The plugin version, wherever the saved tree writes it: replaced by
+ *       {@code <version>}, so a release does not move every tree digest.</li>
  *   <li>{@code run_utc} (summary.csv) and the {@code Written by version ... on}
  *       line of README.txt: the clock.</li>
  *   <li>In the {@code settings} text of summary.csv and the {@code Macro:} line of
@@ -334,6 +336,9 @@ public class GoldenOutputsTest {
         String path = root.getAbsolutePath();
         text = text.replace(path, "<root>").replace(path.replace('\\', '/'), "<root>");
         text = text.replaceAll("serial=(true|false)", "serial=*");
+        // The plugin version is written into summary.csv and README.txt. It is not a
+        // measurement, and without this every version change moved all 25 tree digests.
+        text = text.replace(RegDrift.VERSION, "<version>");
         StringBuilder kept = new StringBuilder();
         for (String line : text.split("\n", -1)) {
             if (line.startsWith("Written by version ")) continue;

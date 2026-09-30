@@ -4,6 +4,8 @@ All notable changes to Registration & Drift Comparison are documented here. The
 format follows [Keep a Changelog](https://keepachangelog.com/) and this project
 adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
 ## [0.2.0] - 2026-09-30
 
 Fixes the slow-drift reading of 0.1.0. Everything else is unchanged.
