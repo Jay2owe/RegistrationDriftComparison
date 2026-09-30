@@ -276,7 +276,8 @@ times the recording**, and all of that 12% is the larger frames. A whole diagnos
 **From the update site (recommended).** In Fiji, open **Help ▸ Update…**, click **Manage update
 sites**, tick **Registration-Drift-Comparison**, or add it with **Add unlisted site** and the URL
 `https://sites.imagej.net/Registration-Drift-Comparison/`. Apply the changes and restart Fiji. The
-updater then keeps the plugin current.
+updater then keeps the plugin current. The update site is being set up; until it is live, install by
+hand as below.
 
 **By hand.** Download `RegistrationDriftComparison-0.1.0.jar` from the
 [GitHub release](https://github.com/Jay2owe/RegistrationDriftComparison/releases/tag/v0.1.0), drop it
